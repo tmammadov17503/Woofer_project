@@ -45,5 +45,49 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/yourusername/woofer-ai-fintech.git](https://github.com/yourusername/woofer-ai-fintech.git)
+   git clone https://github.com/tmammadov17503/woofer_project
    cd Woofer
+2. **Install dependencies:**
+   ```bash
+   pip install streamlit tensorflow pillow fpdf numpy
+3. **Run the application:**
+   ```bash
+   streamlit run app.py
+  
+## 💰 Business Model
+Woofer utilizes a diversified revenue strategy designed for high adoption and long-term financial sustainability in the Azerbaijani market. 
+
+* **Freemium Matchmaking:** Core matchmaking features are accessible to all users to drive platform growth. 
+* **Tiered Subscription Plans:** 
+* **Woofer Basic (4.99 AZN/mo):** Includes verified profile badges and advanced search filters.
+* **Woofer Pro (14.99 AZN/mo):** Targeted at professional breeders, providing official certifications.
+* **Fintech Integration (Transaction Fees):** A **5% commission** on all peer-to-peer escrow payments for breeding fees and puppy sales.
+* **Partnerships & Advertising:** Collaborative revenue from pet stores, veterinary clinics, and professional breeders. 
+* **Event Monetization:** Ticket sales for community-driven dog meetups and professional showcases. 
+
+---
+
+## 🗺️ Strategic Roadmap
+The execution plan focuses on establishing local dominance in Azerbaijan before pursuing regional expansion. 
+
+### Phase 1: Research & Prototype (Q2 2025)
+* Market research and initial development of the AI-powered prototype for breed and identity verification. 
+
+### Phase 2: Beta Launch (Q3 2025)
+* Localized launch in Azerbaijan with key partnerships established among veterinary networks and pet communities. 
+
+### Phase 3: Official Launch (Q4 2025)
+* Full platform release accompanied by aggressive marketing and official branding. 
+
+### Future Phases: Scaling
+* **Regional Expansion:** Strategic growth into neighboring CIS markets and Turkey. 
+* **Sector Diversification:** Applying AI-identity and secure escrow technology to high-value livestock (Agri-Tech).
+
+---
+
+## 📈 Market Rationale
+* **Untapped Potential:** Azerbaijan has approximately **240,000 dogs**, yet lacks a local digital solution for responsible ownership. 
+* **Demand for Trust:** Over **80% of owners** prioritize health verification, while **70% report distrust** in current unverified social media groups. 
+* **Why Now:** Rising pet ownership and a lack of local digital solutions make this the optimal time for a first-mover advantage. 
+
+---
