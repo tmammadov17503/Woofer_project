@@ -1,7 +1,4 @@
 import streamlit as st
-import tensorflow as tf
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing import image as keras_image
 import numpy as np
 from PIL import Image
 import time
@@ -12,6 +9,27 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import re
 import urllib.parse
+
+# ── Tensorflow / Keras ────────────────────────────────────────────────────────
+# Use tensorflow-cpu on Streamlit Cloud (lighter, no GPU needed for inference).
+# Falls back to standalone keras if tensorflow is unavailable.
+try:
+    import tensorflow as tf
+    from tensorflow.keras.applications.mobilenet_v2 import (
+        MobileNetV2,
+        preprocess_input,
+        decode_predictions,
+    )
+    from tensorflow.keras.preprocessing import image as keras_image
+except Exception:
+    # standalone keras (keras>=3.0 installed without tensorflow)
+    from keras.applications.mobilenet_v2 import (
+        MobileNetV2,
+        preprocess_input,
+        decode_predictions,
+    )
+    from keras.preprocessing import image as keras_image
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Page Configuration
 st.set_page_config(
@@ -1047,4 +1065,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
