@@ -538,7 +538,7 @@ def create_care_guide_pdf(pet_data, breed_info, breed_display_name):
                          "Always consult with a licensed veterinarian for specific medical advice and dietary recommendations "
                          "tailored to your individual pet's needs.")
 
-    return pdf.output(dest='S').encode('latin-1')
+    return bytes(pdf.output())
 
 
 # ==================== AI MODEL ====================
@@ -1082,4 +1082,5 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
