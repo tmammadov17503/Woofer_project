@@ -1,0 +1,144 @@
+/* ═══════════════════════════════════════════════════
+   Woofer Care AI — style.css
+   Companion stylesheet for index.html
+   Additional / override styles live here
+═══════════════════════════════════════════════════ */
+
+/* ── DEMO VIDEO SECTION ── */
+.demo {
+  padding: 6rem 3rem;
+  background: var(--dark);
+  text-align: center;
+}
+.demo .section-tag { color: var(--amber); }
+.demo .section-title { color: var(--cream); margin-inline: auto; }
+
+.video-wrapper {
+  position: relative;
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  border: 2px solid rgba(232,164,74,0.3);
+  cursor: pointer;
+}
+.video-wrapper iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: none;
+}
+
+/* Thumbnail overlay — shown before user clicks play */
+.video-thumb {
+  position: absolute; inset: 0;
+  background: var(--dark);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 1rem;
+  transition: opacity 0.4s;
+}
+.video-thumb img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+}
+.play-btn {
+  position: relative; z-index: 2;
+  width: 80px; height: 80px;
+  background: var(--amber);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 12px rgba(232,164,74,0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.play-btn::after {
+  content: '';
+  border-left: 28px solid var(--dark);
+  border-top: 17px solid transparent;
+  border-bottom: 17px solid transparent;
+  margin-left: 6px;
+}
+.play-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 20px rgba(232,164,74,0.2);
+}
+.video-thumb.hidden { opacity: 0; pointer-events: none; }
+
+.video-caption {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: rgba(253,246,236,0.5);
+}
+
+/* ── BACK-TO-TOP BUTTON ── */
+.back-to-top {
+  position: fixed;
+  bottom: 2rem; right: 2rem;
+  width: 44px; height: 44px;
+  background: var(--amber);
+  color: var(--dark);
+  border: none; border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(232,164,74,0.4);
+  opacity: 0; pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 200;
+}
+.back-to-top.visible {
+  opacity: 1; pointer-events: all;
+  transform: translateY(0);
+}
+.back-to-top:hover { background: var(--rust); }
+
+/* ── MOBILE NAV HAMBURGER ── */
+.nav-hamburger {
+  display: none;
+  flex-direction: column; gap: 5px;
+  cursor: pointer; padding: 4px;
+}
+.nav-hamburger span {
+  display: block; width: 24px; height: 2px;
+  background: var(--brown);
+  transition: all 0.3s;
+}
+.mobile-menu {
+  display: none;
+  position: fixed; top: 70px; left: 0; right: 0;
+  background: var(--cream);
+  border-bottom: 1px solid rgba(122,79,46,0.15);
+  padding: 1.5rem 2rem;
+  flex-direction: column; gap: 1.2rem;
+  z-index: 99;
+  box-shadow: 0 8px 24px rgba(44,26,14,0.1);
+}
+.mobile-menu.open { display: flex; }
+.mobile-menu a {
+  text-decoration: none; color: var(--brown);
+  font-weight: 600; font-size: 1.1rem;
+}
+.mobile-menu a:last-child {
+  background: var(--amber); color: var(--dark);
+  padding: 0.7rem 1.5rem; border-radius: 50px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .nav-hamburger { display: flex; }
+  .demo { padding: 4rem 1.5rem; }
+}
+
+/* ── SMOOTH ACTIVE NAV LINKS ── */
+.nav-links a.active { color: var(--amber); }
+
+/* ── FEATURE CARD STAGGER ── */
+.feat-card:nth-child(1) { transition-delay: 0s; }
+.feat-card:nth-child(2) { transition-delay: 0.07s; }
+.feat-card:nth-child(3) { transition-delay: 0.14s; }
+.feat-card:nth-child(4) { transition-delay: 0.21s; }
+.feat-card:nth-child(5) { transition-delay: 0.28s; }
+.feat-card:nth-child(6) { transition-delay: 0.35s; }
