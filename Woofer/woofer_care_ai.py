@@ -11,24 +11,39 @@ import re
 import urllib.parse
 
 # ── Tensorflow / Keras ────────────────────────────────────────────────────────
-# Use tensorflow-cpu on Streamlit Cloud (lighter, no GPU needed for inference).
-# Falls back to standalone keras if tensorflow is unavailable.
+# tensorflow-cpu >= 2.20 supports Python 3.13 (Streamlit Cloud default).
+# In tf 2.16+, Keras became a standalone package — imports changed.
 try:
     import tensorflow as tf
-    from tensorflow.keras.applications.mobilenet_v2 import (
-        MobileNetV2,
-        preprocess_input,
-        decode_predictions,
-    )
-    from tensorflow.keras.preprocessing import image as keras_image
-except Exception:
-    # standalone keras (keras>=3.0 installed without tensorflow)
-    from keras.applications.mobilenet_v2 import (
-        MobileNetV2,
-        preprocess_input,
-        decode_predictions,
-    )
-    from keras.preprocessing import image as keras_image
+    try:
+        # tf 2.16+ / 2.20+ style (keras is a separate package)
+        from keras.applications.mobilenet_v2 import (
+            MobileNetV2,
+            preprocess_input,
+            decode_predictions,
+        )
+        from keras.utils import load_img, img_to_array as _img_to_array
+
+        class keras_image:
+            @staticmethod
+            def load_img(path, target_size=None):
+                return load_img(path, target_size=target_size)
+            @staticmethod
+            def img_to_array(img):
+                return _img_to_array(img)
+
+    except ImportError:
+        # tf 2.15 and older style
+        from tensorflow.keras.applications.mobilenet_v2 import (
+            MobileNetV2,
+            preprocess_input,
+            decode_predictions,
+        )
+        from tensorflow.keras.preprocessing import image as keras_image
+
+except Exception as e:
+    st.error(f"TensorFlow failed to load: {e}")
+    st.stop()
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Page Configuration
@@ -1067,3 +1082,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
