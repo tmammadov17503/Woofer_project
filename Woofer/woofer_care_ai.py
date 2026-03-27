@@ -777,6 +777,7 @@ def load_woofer_model():
 
 def predict_breed(img):
     model = load_woofer_model()
+    img = img.convert("RGB")
     img   = img.resize((224, 224))
     x     = keras_image.img_to_array(img)
     x     = np.expand_dims(x, axis=0)
