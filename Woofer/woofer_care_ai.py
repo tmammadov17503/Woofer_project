@@ -9,18 +9,14 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import re
 import urllib.parse
+import requests
 
 # ── Tensorflow / Keras ────────────────────────────────────────────────────────
-# tensorflow-cpu >= 2.20 supports Python 3.13 (Streamlit Cloud default).
-# In tf 2.16+, Keras became a standalone package — imports changed.
 try:
     import tensorflow as tf
     try:
-        # tf 2.16+ / 2.20+ style (keras is a separate package)
         from keras.applications.mobilenet_v2 import (
-            MobileNetV2,
-            preprocess_input,
-            decode_predictions,
+            MobileNetV2, preprocess_input, decode_predictions,
         )
         from keras.utils import load_img, img_to_array as _img_to_array
 
@@ -31,22 +27,17 @@ try:
             @staticmethod
             def img_to_array(img):
                 return _img_to_array(img)
-
     except ImportError:
-        # tf 2.15 and older style
         from tensorflow.keras.applications.mobilenet_v2 import (
-            MobileNetV2,
-            preprocess_input,
-            decode_predictions,
+            MobileNetV2, preprocess_input, decode_predictions,
         )
         from tensorflow.keras.preprocessing import image as keras_image
-
 except Exception as e:
     st.error(f"TensorFlow failed to load: {e}")
     st.stop()
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Page Configuration
+# ── Page Configuration ────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Woofer Care AI - Smart Pet Analysis",
     page_icon="🐶",
@@ -54,11 +45,308 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# File paths
-DB_FILE = "woofer_care_registry.json"
+# ── Custom CSS ────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+  /* ── General ── */
+  .main { background: #FDF6EC; }
+
+  /* ── Vet Assistant chat bubbles ── */
+  .chat-wrapper { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+
+  .chat-bubble-user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #7A4F2E, #C0532A);
+    color: white;
+    padding: 12px 18px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 80%;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(122,79,46,0.25);
+  }
+
+  .chat-bubble-assistant {
+    align-self: flex-start;
+    background: white;
+    color: #2C1A0E;
+    padding: 14px 18px;
+    border-radius: 20px 20px 20px 4px;
+    max-width: 85%;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    box-shadow: 0 2px 12px rgba(44,26,14,0.1);
+    border-left: 4px solid #E8A44A;
+  }
+
+  .chat-meta {
+    font-size: 0.75rem;
+    opacity: 0.55;
+    margin-top: 4px;
+  }
+
+  .vet-header {
+    background: linear-gradient(135deg, #2C1A0E 0%, #7A4F2E 100%);
+    border-radius: 16px;
+    padding: 24px 28px;
+    color: white;
+    margin-bottom: 20px;
+  }
+  .vet-header h2 { margin: 0 0 6px 0; font-size: 1.5rem; }
+  .vet-header p  { margin: 0; opacity: 0.75; font-size: 0.92rem; }
+
+  .context-pill {
+    display: inline-block;
+    background: rgba(232,164,74,0.15);
+    border: 1px solid rgba(232,164,74,0.4);
+    color: #7A4F2E;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 3px 3px 3px 0;
+  }
+
+  .disclaimer-box {
+    background: #FEF3E2;
+    border: 1px solid #E8A44A;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    color: #7A4F2E;
+    margin-top: 12px;
+  }
+
+  /* ── Quick symptom chips ── */
+  div[data-testid="stHorizontalBlock"] button {
+    border-radius: 20px !important;
+    font-size: 0.82rem !important;
+  }
+</style>
+""", unsafe_allow_html=True)
+
+# ── File paths ────────────────────────────────────────────────────────────────
+DB_FILE             = "woofer_care_registry.json"
 KNOWLEDGE_BASE_FILE = "dog_care_knowledge.json"
 
-# ==================== AZERBAIJAN E-COMMERCE LINKS ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# GROQ LLM INTEGRATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama3-70b-8192"   # best free model on Groq
+
+def get_groq_key():
+    """Safely retrieve Groq API key from Streamlit secrets."""
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        return None
+
+
+def build_vet_system_prompt(pet: dict) -> str:
+    """
+    Build a rich, breed-aware system prompt so Llama knows exactly
+    who it's talking about before the user says a word.
+    """
+    breed      = pet.get("breed_detected", "Unknown breed")
+    age        = pet.get("age", "unknown age")
+    weight     = pet.get("weight", "unknown weight")
+    nickname   = pet.get("nickname", "this dog")
+    notes      = pet.get("health_notes", "")
+    care       = pet.get("care_data", {})
+    known_issues = care.get("health", {}).get("common_issues", [])
+    diet_type    = care.get("nutrition", {}).get("diet_type", "")
+    exercise_req = care.get("exercise", {}).get("daily_requirement", "")
+    lifespan     = care.get("health", {}).get("lifespan", "")
+
+    known_str = ", ".join(known_issues) if known_issues else "none on record"
+
+    return f"""You are Woofer Vet Assistant — a knowledgeable, warm, and careful AI veterinary guide built into the Woofer Care AI platform for pet owners in Azerbaijan.
+
+You are currently helping with a specific dog. Here is their full profile:
+
+🐕 Name: {nickname}
+🔬 Breed: {breed}
+📅 Age: {age} years
+⚖️ Weight: {weight} kg
+🏥 Known health vulnerabilities for this breed: {known_str}
+🥩 Diet type: {diet_type}
+🏃 Daily exercise requirement: {exercise_req}
+❤️ Expected lifespan: {lifespan}
+📝 Owner health notes: {notes if notes else "none provided"}
+
+Your behaviour rules:
+1. Always keep the breed, age, and weight in mind when answering — tailor every response to THIS dog specifically.
+2. Be warm, clear, and reassuring — owners are often worried when asking health questions.
+3. For serious or emergency symptoms (difficulty breathing, collapse, bloat, seizures, uncontrolled bleeding) — always say to go to a vet IMMEDIATELY and make this very clear.
+4. For non-emergency symptoms — give helpful guidance, possible causes, and home monitoring tips, but always recommend a vet visit if symptoms persist beyond 24-48 hours.
+5. Never diagnose definitively. Say "this may indicate" or "could be related to" rather than "this is definitely".
+6. At the end of every response, add a short disclaimer reminding the owner that your advice does not replace a licensed veterinarian.
+7. Keep responses concise — 3 to 5 short paragraphs maximum. Use bullet points where helpful.
+8. If the user writes in Azerbaijani, respond in Azerbaijani. If in English, respond in English.
+9. Reference the breed's known vulnerabilities when relevant — for example if a Golden Retriever shows joint pain, mention hip dysplasia as a possibility.
+10. You are part of an ethical, adoption-first platform. If someone asks about buying/selling pets, gently redirect them to adoption."""
+
+
+def ask_groq(messages: list, system_prompt: str) -> str:
+    """Send a conversation to Groq and return the assistant reply."""
+    api_key = get_groq_key()
+    if not api_key:
+        return "⚠️ Groq API key not found. Please add GROQ_API_KEY to your Streamlit secrets."
+
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [{"role": "system", "content": system_prompt}] + messages,
+        "temperature": 0.55,
+        "max_tokens": 900,
+        "stream": False,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(GROQ_API_URL, json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    except requests.exceptions.Timeout:
+        return "⚠️ Request timed out. Please try again."
+    except requests.exceptions.HTTPError as e:
+        return f"⚠️ API error: {e.response.status_code} — {e.response.text[:200]}"
+    except Exception as e:
+        return f"⚠️ Unexpected error: {str(e)}"
+
+
+# ── Quick symptom suggestions shown as chips ──────────────────────────────────
+QUICK_SYMPTOMS = [
+    "🤒 Lethargy / low energy",
+    "🍽️ Not eating / loss of appetite",
+    "🤮 Vomiting",
+    "💩 Diarrhea",
+    "🐾 Limping / joint pain",
+    "😮‍💨 Breathing difficulties",
+    "🔴 Skin rash / itching",
+    "👁️ Eye discharge / cloudiness",
+    "🦻 Ear scratching / smell",
+    "⚖️ Rapid weight loss",
+    "💧 Excessive thirst / urination",
+    "😰 Anxiety / restlessness",
+]
+
+
+def render_vet_chat(pet: dict, chat_key: str):
+    """
+    Renders the full Vet Assistant chat UI for a given pet.
+    chat_key makes session state unique per context (inline vs tab).
+    """
+    hist_key   = f"vet_history_{chat_key}"
+    input_key  = f"vet_input_{chat_key}"
+    chip_key   = f"chip_trigger_{chat_key}"
+
+    if hist_key not in st.session_state:
+        st.session_state[hist_key] = []
+
+    system_prompt = build_vet_system_prompt(pet)
+
+    # ── Header card ──
+    st.markdown(f"""
+    <div class="vet-header">
+      <h2>🩺 Woofer Vet Assistant</h2>
+      <p>AI-powered health guidance for <strong>{pet.get('nickname','your dog')}</strong> — powered by Llama 3 (Groq)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Context pills showing what the AI knows ──
+    st.markdown("**The assistant already knows:**")
+    breed   = pet.get("breed_detected", "Unknown")
+    age     = pet.get("age", "?")
+    weight  = pet.get("weight", "?")
+    care    = pet.get("care_data", {})
+    issues  = care.get("health", {}).get("common_issues", [])
+
+    pills_html = (
+        f'<span class="context-pill">🔬 {breed}</span>'
+        f'<span class="context-pill">📅 {age} yrs</span>'
+        f'<span class="context-pill">⚖️ {weight} kg</span>'
+    )
+    for issue in issues[:3]:
+        pills_html += f'<span class="context-pill">⚠️ {issue}</span>'
+    st.markdown(pills_html, unsafe_allow_html=True)
+    st.markdown("")
+
+    # ── Quick symptom chips ──
+    st.markdown("**Quick symptoms — click to ask instantly:**")
+    cols = st.columns(4)
+    for i, symptom in enumerate(QUICK_SYMPTOMS):
+        if cols[i % 4].button(symptom, key=f"{chip_key}_{i}", use_container_width=True):
+            st.session_state[hist_key].append({"role": "user", "content": symptom})
+            with st.spinner("Woofer Vet is thinking..."):
+                reply = ask_groq(st.session_state[hist_key], system_prompt)
+            st.session_state[hist_key].append({"role": "assistant", "content": reply})
+            st.rerun()
+
+    st.divider()
+
+    # ── Chat history ──
+    if st.session_state[hist_key]:
+        st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
+        for msg in st.session_state[hist_key]:
+            if msg["role"] == "user":
+                st.markdown(
+                    f'<div class="chat-bubble-user">🧑 {msg["content"]}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                # Format assistant response — preserve line breaks
+                content = msg["content"].replace("\n", "<br>")
+                st.markdown(
+                    f'<div class="chat-bubble-assistant">🩺 {content}</div>',
+                    unsafe_allow_html=True
+                )
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("👆 Click a symptom chip above or type your question below to start.")
+
+    # ── Text input ──
+    st.markdown("")
+    with st.form(key=f"chat_form_{chat_key}", clear_on_submit=True):
+        col_input, col_send = st.columns([5, 1])
+        with col_input:
+            user_input = st.text_input(
+                "Describe symptoms or ask a question...",
+                placeholder=f"e.g. '{pet.get('nickname','My dog')} has been scratching her ears for 2 days'",
+                label_visibility="collapsed",
+                key=input_key
+            )
+        with col_send:
+            submitted = st.form_submit_button("Send 🐾", use_container_width=True, type="primary")
+
+        if submitted and user_input.strip():
+            st.session_state[hist_key].append({"role": "user", "content": user_input.strip()})
+            with st.spinner("Woofer Vet is thinking..."):
+                reply = ask_groq(st.session_state[hist_key], system_prompt)
+            st.session_state[hist_key].append({"role": "assistant", "content": reply})
+            st.rerun()
+
+    # ── Clear chat button ──
+    if st.session_state[hist_key]:
+        if st.button("🗑️ Clear conversation", key=f"clear_{chat_key}"):
+            st.session_state[hist_key] = []
+            st.rerun()
+
+    # ── Disclaimer ──
+    st.markdown("""
+    <div class="disclaimer-box">
+      ⚕️ <strong>Medical Disclaimer:</strong> Woofer Vet Assistant provides general guidance only
+      and does not replace a licensed veterinarian. For emergencies, contact your vet immediately.
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AZERBAIJAN E-COMMERCE LINKS
+# ══════════════════════════════════════════════════════════════════════════════
 
 AZERBAIJAN_PET_STORES = {
     "biopet": {
@@ -83,13 +371,7 @@ AZERBAIJAN_PET_STORES = {
 
 
 def get_azerbaijan_search_links(item_name):
-    """
-    Generate search links for Azerbaijani pet stores
-    Returns dict of store names and their search URLs
-    """
-    # Clean and encode the search term
     search_term = urllib.parse.quote(item_name)
-
     links = {}
     for store_key, store_info in AZERBAIJAN_PET_STORES.items():
         links[store_key] = {
@@ -101,10 +383,11 @@ def get_azerbaijan_search_links(item_name):
     return links
 
 
-# ==================== KNOWLEDGE BASE (RAG System) ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# KNOWLEDGE BASE (RAG)
+# ══════════════════════════════════════════════════════════════════════════════
 
 def initialize_knowledge_base():
-    """Initialize comprehensive dog care knowledge base"""
     knowledge_base = {
         "siberian_husky": {
             "breed_names": ["siberian husky", "husky", "eskimo dog", "malamute"],
@@ -134,19 +417,15 @@ def initialize_knowledge_base():
                 "lifespan": "12-14 years"
             },
             "supplies": [
-                {"category": "Food & Nutrition",
-                 "items": ["High-protein dry food", "Fish oil supplements", "Zinc supplements"]},
-                {"category": "Grooming",
-                 "items": ["Undercoat rake", "Slicker brush", "Deshedding tool", "Dog shampoo"]},
-                {"category": "Exercise",
-                 "items": ["Harness (not collar)", "Long lead (20ft)", "Backpack for hiking", "Cooling mat"]},
+                {"category": "Food & Nutrition", "items": ["High-protein dry food", "Fish oil supplements", "Zinc supplements"]},
+                {"category": "Grooming", "items": ["Undercoat rake", "Slicker brush", "Deshedding tool", "Dog shampoo"]},
+                {"category": "Exercise", "items": ["Harness (not collar)", "Long lead (20ft)", "Backpack for hiking", "Cooling mat"]},
                 {"category": "Comfort", "items": ["Elevated bed", "Cooling mat", "Durable chew toys", "Puzzle feeder"]}
             ],
             "cost_estimate_monthly": "150-250 AZN",
             "good_for": ["Active families", "Experienced owners", "Cold climates", "Outdoor enthusiasts"],
             "challenges": ["Escape artists", "High prey drive", "Vocal/howling", "Requires extensive exercise"]
         },
-
         "golden_retriever": {
             "breed_names": ["golden retriever"],
             "nutrition": {
@@ -175,18 +454,15 @@ def initialize_knowledge_base():
                 "lifespan": "10-12 years"
             },
             "supplies": [
-                {"category": "Food & Nutrition",
-                 "items": ["Weight management formula", "Joint supplements", "Omega-3 fish oil"]},
-                {"category": "Grooming",
-                 "items": ["Pin brush", "Deshedding tool", "Gentle shampoo", "Ear cleaning solution"]},
+                {"category": "Food & Nutrition", "items": ["Weight management formula", "Joint supplements", "Omega-3 fish oil"]},
+                {"category": "Grooming", "items": ["Pin brush", "Deshedding tool", "Gentle shampoo", "Ear cleaning solution"]},
                 {"category": "Exercise", "items": ["Tennis balls", "Floating toys", "Comfortable harness"]},
                 {"category": "Comfort", "items": ["Orthopedic bed", "Cooling vest", "Slow feeder bowl"]}
             ],
             "cost_estimate_monthly": "120-200 AZN",
             "good_for": ["Families with children", "First-time owners", "Therapy work", "Active households"],
-            "challenges": ["Shedding", "Mouthiness (carrying things)", "Prone to obesity", "Separation anxiety"]
+            "challenges": ["Shedding", "Mouthiness", "Prone to obesity", "Separation anxiety"]
         },
-
         "german_shepherd": {
             "breed_names": ["german shepherd", "alsatian"],
             "nutrition": {
@@ -215,8 +491,7 @@ def initialize_knowledge_base():
                 "lifespan": "9-13 years"
             },
             "supplies": [
-                {"category": "Food & Nutrition",
-                 "items": ["Large breed formula", "Joint supplements", "Digestive enzymes"]},
+                {"category": "Food & Nutrition", "items": ["Large breed formula", "Joint supplements", "Digestive enzymes"]},
                 {"category": "Grooming", "items": ["Slicker brush", "Undercoat rake", "Nail grinder", "Paw balm"]},
                 {"category": "Exercise", "items": ["Training leash", "Agility equipment", "Scent work kits"]},
                 {"category": "Comfort", "items": ["Elevated bed", "Chew-resistant toys", "Anxiety wrap"]}
@@ -225,7 +500,6 @@ def initialize_knowledge_base():
             "good_for": ["Working roles", "Protection", "Active owners", "Training enthusiasts"],
             "challenges": ["Needs firm training", "Potential aggression if not socialized", "Health issues", "Shedding"]
         },
-
         "french_bulldog": {
             "breed_names": ["french bulldog", "frenchie"],
             "nutrition": {
@@ -248,15 +522,13 @@ def initialize_knowledge_base():
                 "mental_stimulation": "Puzzle toys, short training sessions"
             },
             "health": {
-                "common_issues": ["Brachycephalic syndrome", "Skin allergies", "Intervertebral disc disease",
-                                  "Heat sensitivity"],
+                "common_issues": ["Brachycephalic syndrome", "Skin allergies", "Intervertebral disc disease", "Heat sensitivity"],
                 "vet_checkups": "Every 4-6 months",
                 "vaccination_schedule": "Core vaccines + rabies",
                 "lifespan": "10-12 years"
             },
             "supplies": [
-                {"category": "Food & Nutrition",
-                 "items": ["Hypoallergenic formula", "Probiotics", "Elevated feeding bowl"]},
+                {"category": "Food & Nutrition", "items": ["Hypoallergenic formula", "Probiotics", "Elevated feeding bowl"]},
                 {"category": "Grooming", "items": ["Wrinkle wipes", "Gentle shampoo", "Nail clippers", "Cooling coat"]},
                 {"category": "Exercise", "items": ["Harness (never collar)", "Cooling vest", "Indoor toys"]},
                 {"category": "Comfort", "items": ["Cooling mat", "Elevated bed", "Breathable bedding"]}
@@ -265,7 +537,6 @@ def initialize_knowledge_base():
             "good_for": ["Apartment living", "Low-activity owners", "Companion pet", "Small spaces"],
             "challenges": ["Health issues", "Cannot swim", "Heat intolerance", "Expensive veterinary care"]
         },
-
         "labrador_retriever": {
             "breed_names": ["labrador retriever", "labrador"],
             "nutrition": {
@@ -294,9 +565,8 @@ def initialize_knowledge_base():
                 "lifespan": "10-12 years"
             },
             "supplies": [
-                {"category": "Food & Nutrition",
-                 "items": ["Weight management kibble", "Measuring cups", "Low-calorie treats"]},
-                {"category": "Grooming", "items": ["Rubber curry brush", "Ear cleaner", "Towels (love water)"]},
+                {"category": "Food & Nutrition", "items": ["Weight management kibble", "Measuring cups", "Low-calorie treats"]},
+                {"category": "Grooming", "items": ["Rubber curry brush", "Ear cleaner", "Towels"]},
                 {"category": "Exercise", "items": ["Floating toys", "Chuck-it launcher", "Life jacket"]},
                 {"category": "Comfort", "items": ["Durable bed", "Chew toys", "Slow feeder bowl"]}
             ],
@@ -304,7 +574,6 @@ def initialize_knowledge_base():
             "good_for": ["Families", "Active owners", "Water activities", "First-time owners"],
             "challenges": ["Food obsession", "Shedding", "Chewing (puppies)", "Joint issues"]
         },
-
         "general_dog": {
             "breed_names": ["mixed breed", "unknown", "mixed"],
             "nutrition": {
@@ -333,8 +602,7 @@ def initialize_knowledge_base():
                 "lifespan": "Varies significantly"
             },
             "supplies": [
-                {"category": "Essentials",
-                 "items": ["Quality dog food", "Food/water bowls", "Collar and leash", "ID tags"]},
+                {"category": "Essentials", "items": ["Quality dog food", "Food/water bowls", "Collar and leash", "ID tags"]},
                 {"category": "Health", "items": ["Flea/tick prevention", "Heartworm prevention", "First aid kit"]},
                 {"category": "Comfort", "items": ["Bed", "Toys", "Crate (optional)"]}
             ],
@@ -343,49 +611,35 @@ def initialize_knowledge_base():
             "challenges": ["Unknown genetic health risks", "Variable exercise needs"]
         }
     }
-
-    # Save to file for persistence
     with open(KNOWLEDGE_BASE_FILE, "w") as f:
         json.dump(knowledge_base, f, indent=4)
-
     return knowledge_base
 
 
 def load_knowledge_base():
-    """Load or initialize the knowledge base"""
     if os.path.exists(KNOWLEDGE_BASE_FILE):
         with open(KNOWLEDGE_BASE_FILE, "r") as f:
             return json.load(f)
-    else:
-        return initialize_knowledge_base()
+    return initialize_knowledge_base()
 
 
 def get_breed_info(knowledge_base, breed_label):
-    """
-    RAG: Retrieve breed information from knowledge base
-    Uses fuzzy matching to find the best breed match
-    """
     breed_label = breed_label.lower().replace('_', ' ')
-
-    # Direct match
     for breed_key, data in knowledge_base.items():
         if any(name in breed_label for name in data["breed_names"]):
             return breed_key, data
-
-    # Partial matching
     for breed_key, data in knowledge_base.items():
         for name in data["breed_names"]:
             if name in breed_label or breed_label in name:
                 return breed_key, data
-
-    # Default to general dog care
     return "general_dog", knowledge_base["general_dog"]
 
 
-# ==================== DATABASE FUNCTIONS ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# DATABASE
+# ══════════════════════════════════════════════════════════════════════════════
 
 def save_to_db(data):
-    """Save pet profile to database"""
     db = []
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
@@ -393,11 +647,8 @@ def save_to_db(data):
                 db = json.load(f)
             except json.JSONDecodeError:
                 db = []
-
-    # Add timestamp and unique ID
-    data["created_at"] = datetime.now().isoformat()
-    data["profile_id"] = str(uuid.uuid4())[:8].upper()
-
+    data["created_at"]  = datetime.now().isoformat()
+    data["profile_id"]  = str(uuid.uuid4())[:8].upper()
     db.append(data)
     with open(DB_FILE, "w") as f:
         json.dump(db, f, indent=4)
@@ -405,7 +656,6 @@ def save_to_db(data):
 
 
 def load_all_pets():
-    """Load all pet profiles"""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
             try:
@@ -416,7 +666,6 @@ def load_all_pets():
 
 
 def update_pet_profile(profile_id, updates):
-    """Update existing pet profile"""
     pets = load_all_pets()
     for pet in pets:
         if pet.get("profile_id") == profile_id:
@@ -428,52 +677,41 @@ def update_pet_profile(profile_id, updates):
     return False
 
 
-# ==================== PDF GENERATOR (FIXED) ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# PDF GENERATOR
+# ══════════════════════════════════════════════════════════════════════════════
 
 def create_care_guide_pdf(pet_data, breed_info, breed_display_name):
-    """
-    Generate personalized care guide PDF
-    FIXED: Now correctly uses breed_display_name parameter instead of looking for 'breed' key
-    """
     pdf = FPDF()
     pdf.add_page()
 
-    # Header
     pdf.set_font("Arial", "B", 20)
     pdf.set_text_color(41, 128, 185)
     pdf.cell(200, 15, "WOOFER CARE AI - PERSONALIZED GUIDE", ln=True, align='C')
     pdf.ln(5)
 
-    # Pet Info Section
     pdf.set_font("Arial", "B", 14)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(200, 10, f"Pet Profile: {pet_data.get('nickname', 'Unknown')}", ln=True)
     pdf.set_font("Arial", size=11)
-
-    # FIXED: Use the passed breed_display_name parameter instead of breed_info.get('breed')
     pdf.cell(200, 8, f"Breed: {breed_display_name}", ln=True)
     pdf.cell(200, 8, f"Profile ID: {pet_data.get('profile_id', 'N/A')}", ln=True)
     pdf.cell(200, 8, f"Generated: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
     pdf.ln(5)
 
-    # Nutrition Section
+    nutrition = breed_info.get('nutrition', {})
     pdf.set_font("Arial", "B", 13)
     pdf.set_fill_color(230, 240, 250)
     pdf.cell(200, 10, " NUTRITION & DIET", ln=True, fill=True)
     pdf.ln(2)
-
-    nutrition = breed_info.get('nutrition', {})
     pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, f"Diet Type: {nutrition.get('diet_type', 'N/A')}", ln=True)
     pdf.cell(200, 8, f"Daily Calories: {nutrition.get('calories_per_day', 'N/A')}", ln=True)
     pdf.cell(200, 8, f"Feeding Schedule: {nutrition.get('feeding_schedule', 'N/A')}", ln=True)
-
-    pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, "Recommended Foods:", ln=True)
     pdf.set_font("Arial", size=10)
     for food in nutrition.get('recommended_foods', []):
         pdf.cell(200, 6, f"  - {food}", ln=True)
-
     pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, "Foods to Avoid:", ln=True)
     pdf.set_font("Arial", size=10)
@@ -481,47 +719,37 @@ def create_care_guide_pdf(pet_data, breed_info, breed_display_name):
         pdf.cell(200, 6, f"  - {food}", ln=True)
     pdf.ln(5)
 
-    # Exercise Section
+    exercise = breed_info.get('exercise', {})
     pdf.set_font("Arial", "B", 13)
     pdf.set_fill_color(230, 240, 250)
     pdf.cell(200, 10, " EXERCISE REQUIREMENTS", ln=True, fill=True)
     pdf.ln(2)
-
-    exercise = breed_info.get('exercise', {})
     pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, f"Daily Requirement: {exercise.get('daily_requirement', 'N/A')}", ln=True)
-
-    pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, "Recommended Activities:", ln=True)
     pdf.set_font("Arial", size=10)
     for activity in exercise.get('activities', []):
         pdf.cell(200, 6, f"  - {activity}", ln=True)
     pdf.ln(5)
 
-    # Health Section
+    health = breed_info.get('health', {})
     pdf.set_font("Arial", "B", 13)
     pdf.set_fill_color(230, 240, 250)
     pdf.cell(200, 10, " HEALTH & WELLNESS", ln=True, fill=True)
     pdf.ln(2)
-
-    health = breed_info.get('health', {})
     pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, f"Lifespan: {health.get('lifespan', 'N/A')}", ln=True)
     pdf.cell(200, 8, f"Vet Checkups: {health.get('vet_checkups', 'N/A')}", ln=True)
-
-    pdf.set_font("Arial", "B", 11)
     pdf.cell(200, 8, "Common Health Issues to Monitor:", ln=True)
     pdf.set_font("Arial", size=10)
     for issue in health.get('common_issues', []):
         pdf.cell(200, 6, f"  - {issue}", ln=True)
     pdf.ln(5)
 
-    # Supplies Section
     pdf.set_font("Arial", "B", 13)
     pdf.set_fill_color(230, 240, 250)
     pdf.cell(200, 10, " RECOMMENDED SUPPLIES", ln=True, fill=True)
     pdf.ln(2)
-
     for category in breed_info.get('supplies', []):
         pdf.set_font("Arial", "B", 11)
         pdf.cell(200, 8, f"{category['category']}:", ln=True)
@@ -530,83 +758,71 @@ def create_care_guide_pdf(pet_data, breed_info, breed_display_name):
             pdf.cell(200, 6, f"  - {item}", ln=True)
         pdf.ln(2)
 
-    # Footer
     pdf.ln(10)
     pdf.set_font("Arial", "I", 9)
     pdf.set_text_color(100, 100, 100)
     pdf.multi_cell(0, 5, "Disclaimer: This guide is generated by AI analysis and should be used as general guidance. "
-                         "Always consult with a licensed veterinarian for specific medical advice and dietary recommendations "
-                         "tailored to your individual pet's needs.")
-
+                         "Always consult with a licensed veterinarian for specific medical advice.")
     return bytes(pdf.output())
 
 
-# ==================== AI MODEL ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# AI BREED MODEL
+# ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_resource
 def load_woofer_model():
-    """Load pre-trained MobileNetV2 for breed identification"""
     return MobileNetV2(weights='imagenet')
 
 
 def predict_breed(img):
-    """
-    Predict dog breed from image
-    Returns breed name and confidence
-    """
     model = load_woofer_model()
-    img = img.resize((224, 224))
-    x = keras_image.img_to_array(img)
-    x = np.expand_dims(x, axis=0)
-    x = preprocess_input(x)
+    img   = img.resize((224, 224))
+    x     = keras_image.img_to_array(img)
+    x     = np.expand_dims(x, axis=0)
+    x     = preprocess_input(x)
     preds = model.predict(x, verbose=0)
     results = decode_predictions(preds, top=5)[0]
 
-    # Map ImageNet labels to dog breeds (simplified mapping)
     dog_breeds = {
-        'siberian_husky': ['siberian_husky', 'eskimo_dog', 'malamute'],
-        'golden_retriever': ['golden_retriever'],
-        'labrador_retriever': ['labrador_retriever'],
-        'german_shepherd': ['german_shepherd', 'malinois'],
-        'french_bulldog': ['french_bulldog', 'bulldog'],
-        'beagle': ['beagle'],
-        'poodle': ['standard_poodle', 'miniature_poodle', 'toy_poodle'],
-        'rottweiler': ['rottweiler'],
+        'siberian_husky':    ['siberian_husky', 'eskimo_dog', 'malamute'],
+        'golden_retriever':  ['golden_retriever'],
+        'labrador_retriever':['labrador_retriever'],
+        'german_shepherd':   ['german_shepherd', 'malinois'],
+        'french_bulldog':    ['french_bulldog', 'bulldog'],
+        'beagle':            ['beagle'],
+        'poodle':            ['standard_poodle', 'miniature_poodle', 'toy_poodle'],
+        'rottweiler':        ['rottweiler'],
         'yorkshire_terrier': ['yorkshire_terrier'],
-        'boxer': ['boxer'],
-        'dachshund': ['dachshund'],
-        'pomeranian': ['pomeranian'],
-        'chihuahua': ['chihuahua'],
-        'border_collie': ['border_collie', 'collie'],
-        'shih_tzu': ['shih_tzu'],
-        'pug': ['pug'],
-        'cocker_spaniel': ['cocker_spaniel', 'english_setter'],
-        'doberman': ['doberman'],
-        'great_dane': ['great_dane'],
-        'schnauzer': ['schnauzer', 'miniature_schnauzer']
+        'boxer':             ['boxer'],
+        'dachshund':         ['dachshund'],
+        'pomeranian':        ['pomeranian'],
+        'chihuahua':         ['chihuahua'],
+        'border_collie':     ['border_collie', 'collie'],
+        'shih_tzu':          ['shih_tzu'],
+        'pug':               ['pug'],
+        'cocker_spaniel':    ['cocker_spaniel', 'english_setter'],
+        'doberman':          ['doberman'],
+        'great_dane':        ['great_dane'],
+        'schnauzer':         ['schnauzer', 'miniature_schnauzer']
     }
 
-    # Check for dog-related predictions
     for imagenet_id, label, confidence in results:
         label_lower = label.lower()
-
-        # Check if it's a dog breed we recognize
         for breed_key, aliases in dog_breeds.items():
             if any(alias in label_lower for alias in aliases):
                 return breed_key.replace('_', ' ').title(), confidence
-
-        # General dog detection
         if 'dog' in label_lower or 'hound' in label_lower or 'terrier' in label_lower:
             return label.replace('_', ' ').title(), confidence
 
-    # If no specific dog breed detected, return top result but note uncertainty
     return results[0][1].replace('_', ' ').title(), results[0][2]
 
 
-# ==================== UI COMPONENTS ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# UI COMPONENTS
+# ══════════════════════════════════════════════════════════════════════════════
 
 def render_header():
-    """Render application header"""
     col1, col2 = st.columns([1, 3])
     with col1:
         st.image("https://img.icons8.com/color/96/dog.png", width=80)
@@ -618,7 +834,6 @@ def render_header():
 
 
 def render_sidebar():
-    """Render sidebar with information"""
     with st.sidebar:
         st.header("About Woofer Care AI")
         st.info("""
@@ -628,35 +843,40 @@ def render_sidebar():
         1. Upload your dog's photo
         2. AI analyzes breed characteristics
         3. Get personalized care recommendations
-        4. Track health and supplies
+        4. Chat with the Vet Assistant about symptoms
+        5. Track health and supplies
 
         **Ethical Commitment:**
-        - We do not support pet sales or breeding markets
+        - We do not support pet sales or breeding
         - Focus on adoption support and welfare
         - Educational resources for responsible ownership
         """)
-
         st.divider()
-
-        # Statistics
         pets = load_all_pets()
         st.metric("Pets Analyzed", len(pets))
-
         if pets:
             st.caption(f"Last analysis: {pets[-1].get('created_at', 'N/A')[:10]}")
 
+        # API status indicator
+        st.divider()
+        key = get_groq_key()
+        if key:
+            st.success("🟢 Vet Assistant: Online")
+        else:
+            st.error("🔴 Vet Assistant: API key missing")
+
 
 def render_breed_analysis():
-    """Tab 1: AI Breed Analysis & Profile Creation"""
     st.header("🔬 Step 1: AI Breed Analysis")
-    st.markdown(
-        "Upload your dog's photo to receive instant breed identification and personalized care recommendations.")
+    st.markdown("Upload your dog's photo to receive instant breed identification and personalized care recommendations.")
 
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        uploaded_file = st.file_uploader("📸 Upload Dog Photo", type=["jpg", "jpeg", "png"],
-                                         help="Clear, well-lit photos work best")
+        uploaded_file = st.file_uploader(
+            "📸 Upload Dog Photo", type=["jpg", "jpeg", "png"],
+            help="Clear, well-lit photos work best"
+        )
 
         if uploaded_file:
             image = Image.open(uploaded_file)
@@ -664,8 +884,7 @@ def render_breed_analysis():
 
             with st.form("pet_profile_form"):
                 st.subheader("Pet Information")
-                nickname = st.text_input("Pet Nickname *", placeholder="e.g., Max, Bella",
-                                         help="What you call your pet")
+                nickname = st.text_input("Pet Nickname *", placeholder="e.g., Max, Bella")
 
                 col_age, col_weight = st.columns(2)
                 with col_age:
@@ -673,66 +892,61 @@ def render_breed_analysis():
                 with col_weight:
                     weight = st.number_input("Weight (kg)", min_value=0.1, max_value=100.0, value=10.0, step=0.5)
 
-                health_notes = st.text_area("Health Notes (Optional)",
-                                            placeholder="Any known allergies, conditions, or special needs...")
+                health_notes = st.text_area(
+                    "Health Notes (Optional)",
+                    placeholder="Any known allergies, conditions, or special needs..."
+                )
 
-                submit_button = st.form_submit_button("🔍 Analyze & Create Care Profile", use_container_width=True,
-                                                      type="primary")
+                submit_button = st.form_submit_button(
+                    "🔍 Analyze & Create Care Profile",
+                    use_container_width=True, type="primary"
+                )
 
                 if submit_button and nickname:
                     with st.spinner("Analyzing breed characteristics..."):
-                        # AI Prediction
                         breed, confidence = predict_breed(image)
-
-                        # Retrieve knowledge base info (RAG)
                         knowledge_base = load_knowledge_base()
                         breed_key, breed_data = get_breed_info(knowledge_base, breed)
 
-                        # Save to database
                         pet_data = {
-                            "nickname": nickname,
+                            "nickname":       nickname,
                             "breed_detected": breed,
-                            "ai_confidence": f"{confidence:.1%}",
-                            "age": age,
-                            "weight": weight,
-                            "health_notes": health_notes,
-                            "breed_key": breed_key,
-                            "care_data": breed_data
+                            "ai_confidence":  f"{confidence:.1%}",
+                            "age":            age,
+                            "weight":         weight,
+                            "health_notes":   health_notes,
+                            "breed_key":      breed_key,
+                            "care_data":      breed_data
                         }
                         profile_id = save_to_db(pet_data)
-
-                        st.session_state['current_pet'] = pet_data
+                        st.session_state['current_pet']       = pet_data
                         st.session_state['analysis_complete'] = True
                         st.success(f"✅ Profile created! ID: {profile_id}")
                         st.rerun()
 
     with col2:
-        if 'analysis_complete' in st.session_state and st.session_state.get('current_pet'):
-            pet = st.session_state['current_pet']
+        if st.session_state.get('analysis_complete') and st.session_state.get('current_pet'):
+            pet        = st.session_state['current_pet']
             breed_data = pet['care_data']
 
             st.subheader("📊 Analysis Results")
-
-            # Confidence indicator
             conf_float = float(pet['ai_confidence'].strip('%')) / 100
             st.progress(conf_float, text=f"AI Confidence: {pet['ai_confidence']}")
-
-            # Breed info cards
             st.metric("Detected Breed", pet['breed_detected'])
             st.metric("Estimated Monthly Care Cost", breed_data.get('cost_estimate_monthly', 'N/A'))
 
-            # Quick stats
             st.subheader("Quick Care Stats")
             cols = st.columns(3)
             with cols[0]:
                 st.metric("Daily Exercise",
                           breed_data.get('exercise', {}).get('daily_requirement', 'N/A').split()[0] + "h")
             with cols[1]:
-                st.metric("Grooming", breed_data.get('grooming', {}).get('brushing', 'N/A').split()[0] + "x/week")
+                st.metric("Grooming",
+                          breed_data.get('grooming', {}).get('brushing', 'N/A').split()[0] + "x/week")
             with cols[2]:
-                st.metric("Lifespan", breed_data.get('health', {}).get('lifespan', 'N/A').split()[0] + " yrs")
+                st.metric("Lifespan",
+                          breed_data.get('health', {}).get('lifespan', 'N/A').split()[0] + " yrs")
 
-            # FIXED: Pass the correct breed name to PDF generator
             pdf_bytes = create_care_guide_pdf(pet, breed_data, pet['breed_detected'])
             st.download_button(
                 label="📥 Download Full Care Guide (PDF)",
@@ -744,9 +958,16 @@ def render_breed_analysis():
         else:
             st.info("👈 Upload a photo and fill out the form to see AI analysis results here.")
 
+    # ── INLINE VET ASSISTANT (appears after analysis) ──────────────────────
+    if st.session_state.get('analysis_complete') and st.session_state.get('current_pet'):
+        st.markdown("---")
+        pet = st.session_state['current_pet']
+        st.markdown(f"### 🩺 Ask the Vet Assistant about {pet.get('nickname', 'your dog')}")
+        st.caption("Describe symptoms or health concerns — the assistant already knows the breed, age, and weight.")
+        render_vet_chat(pet, chat_key="inline")
+
 
 def render_care_recommendations():
-    """Tab 2: Detailed Care Recommendations"""
     st.header("📋 Step 2: Personalized Care Plan")
 
     pets = load_all_pets()
@@ -754,14 +975,11 @@ def render_care_recommendations():
         st.warning("No pet profiles found. Please analyze a pet in Step 1 first.")
         return
 
-    # Pet selector
     selected_pet_name = st.selectbox(
         "Select Pet Profile",
         options=[f"{p['nickname']} ({p['breed_detected']}) - {p['profile_id']}" for p in reversed(pets)],
         index=0
     )
-
-    # Get selected pet data
     selected_profile_id = selected_pet_name.split(" - ")[-1]
     selected_pet = next((p for p in pets if p['profile_id'] == selected_profile_id), None)
 
@@ -770,119 +988,85 @@ def render_care_recommendations():
         return
 
     breed_data = selected_pet.get('care_data', {})
+    care_tabs  = st.tabs(["🍖 Nutrition", "🏃 Exercise", "✨ Grooming", "🏥 Health", "🛒 Supplies"])
 
-    # Display tabs for different care categories
-    care_tabs = st.tabs(["🍖 Nutrition", "🏃 Exercise", "✨ Grooming", "🏥 Health", "🛒 Supplies"])
-
-    with care_tabs[0]:  # Nutrition
+    with care_tabs[0]:
         st.subheader("Dietary Recommendations")
         nutrition = breed_data.get('nutrition', {})
-
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"**Diet Type:** {nutrition.get('diet_type', 'N/A')}")
             st.markdown(f"**Daily Calories:** {nutrition.get('calories_per_day', 'N/A')}")
             st.markdown(f"**Feeding Schedule:** {nutrition.get('feeding_schedule', 'N/A')}")
             st.markdown(f"**Special Needs:** {nutrition.get('special_needs', 'N/A')}")
-
         with col2:
             st.markdown("**✅ Recommended Foods:**")
             for food in nutrition.get('recommended_foods', []):
                 st.markdown(f"- {food}")
-
             st.markdown("**❌ Foods to Avoid:**")
             for food in nutrition.get('avoid', []):
                 st.markdown(f"- {food}")
-
-        # Shopping links for Azerbaijan
         st.divider()
         st.subheader("🛒 Shop in Azerbaijan")
         if nutrition.get('recommended_foods'):
-            search_term = nutrition['recommended_foods'][0]  # Use first recommended food as search
-            links = get_azerbaijan_search_links(search_term)
-
-            cols = st.columns(3)
+            links = get_azerbaijan_search_links(nutrition['recommended_foods'][0])
+            cols  = st.columns(3)
             for idx, (store_key, store_info) in enumerate(links.items()):
                 with cols[idx]:
                     st.markdown(f"**{store_info['icon']} {store_info['name']}**")
                     st.caption(store_info['description'])
                     st.link_button(f"Search {store_info['name']}", store_info['url'], use_container_width=True)
 
-    with care_tabs[1]:  # Exercise
+    with care_tabs[1]:
         st.subheader("Exercise Plan")
         exercise = breed_data.get('exercise', {})
-
         st.markdown(f"**Daily Requirement:** {exercise.get('daily_requirement', 'N/A')}")
-
         st.markdown("**🏆 Recommended Activities:**")
         for activity in exercise.get('activities', []):
             st.markdown(f"- {activity}")
-
-        st.markdown("**🧠 Mental Stimulation:**")
-        st.markdown(exercise.get('mental_stimulation', 'N/A'))
-
-        # Interactive exercise tracker
+        st.markdown(f"**🧠 Mental Stimulation:** {exercise.get('mental_stimulation', 'N/A')}")
         st.divider()
         st.subheader("📅 Daily Exercise Tracker")
         today_exercise = st.number_input("Minutes exercised today", min_value=0, max_value=300, value=30)
-        target = 120  # Default target
-        if 'hour' in exercise.get('daily_requirement', ''):
-            try:
-                target = int(exercise['daily_requirement'].split()[0]) * 60
-            except:
-                pass
-
+        target = 120
+        try:
+            target = int(exercise.get('daily_requirement', '2').split()[0]) * 60
+        except:
+            pass
         progress = min(today_exercise / target, 1.0)
         st.progress(progress, text=f"{today_exercise}/{target} minutes ({progress:.0%})")
-
         if progress >= 1.0:
             st.success("🎉 Daily exercise goal achieved!")
         else:
             st.info(f"💪 {target - today_exercise} more minutes to reach today's goal")
 
-    with care_tabs[2]:  # Grooming
+    with care_tabs[2]:
         st.subheader("Grooming Schedule")
         grooming = breed_data.get('grooming', {})
-
         cols = st.columns(3)
-        with cols[0]:
-            st.metric("Brushing Frequency", grooming.get('brushing', 'N/A'))
-        with cols[1]:
-            st.metric("Bathing", grooming.get('bathing', 'N/A'))
-        with cols[2]:
-            st.metric("Nail Trimming", grooming.get('nail_trimming', 'N/A'))
-
+        with cols[0]: st.metric("Brushing", grooming.get('brushing', 'N/A'))
+        with cols[1]: st.metric("Bathing",  grooming.get('bathing', 'N/A'))
+        with cols[2]: st.metric("Nails",    grooming.get('nail_trimming', 'N/A'))
         st.info(f"**Special Notes:** {grooming.get('special_notes', 'N/A')}")
-
-        # Grooming checklist
         st.divider()
         st.subheader("✅ This Week's Grooming Checklist")
         c1, c2, c3 = st.columns(3)
-        with c1:
-            st.checkbox("Brushing Session")
-        with c2:
-            st.checkbox("Nail Check")
-        with c3:
-            st.checkbox("Ear Cleaning")
+        with c1: st.checkbox("Brushing Session")
+        with c2: st.checkbox("Nail Check")
+        with c3: st.checkbox("Ear Cleaning")
 
-    with care_tabs[3]:  # Health
+    with care_tabs[3]:
         st.subheader("Health Monitoring")
         health = breed_data.get('health', {})
-
         st.markdown(f"**Expected Lifespan:** {health.get('lifespan', 'N/A')}")
         st.markdown(f"**Recommended Vet Visits:** {health.get('vet_checkups', 'N/A')}")
-
         st.markdown("**⚠️ Common Health Issues to Monitor:**")
         for issue in health.get('common_issues', []):
             st.markdown(f"- {issue}")
-
-        # Health records section
         st.divider()
         st.subheader("🏥 Health Records")
-
-        vet_date = st.date_input("Last Vet Visit", value=datetime.now() - timedelta(days=30))
-        next_due = st.date_input("Next Appointment Due", value=datetime.now() + timedelta(days=60))
-
+        vet_date  = st.date_input("Last Vet Visit", value=datetime.now() - timedelta(days=30))
+        next_due  = st.date_input("Next Appointment Due", value=datetime.now() + timedelta(days=60))
         days_until = (next_due - datetime.now().date()).days
         if days_until < 7:
             st.error(f"⚠️ Vet appointment due in {days_until} days!")
@@ -890,13 +1074,11 @@ def render_care_recommendations():
             st.warning(f"⏰ Vet appointment coming up in {days_until} days")
         else:
             st.success(f"✅ Next checkup in {days_until} days")
-
         if selected_pet.get('health_notes'):
             st.info(f"**Your Notes:** {selected_pet['health_notes']}")
 
-    with care_tabs[4]:  # Supplies
+    with care_tabs[4]:
         st.subheader("Recommended Supplies")
-
         for category in breed_data.get('supplies', []):
             with st.expander(f"📦 {category['category']}"):
                 for item in category['items']:
@@ -904,49 +1086,61 @@ def render_care_recommendations():
                     with cols[0]:
                         st.markdown(f"- **{item}**")
                     with cols[1]:
-                        # FIXED: Create search links for this specific item
                         links = get_azerbaijan_search_links(item)
-
-                        # Create a dropdown for store selection
                         store_options = {f"{v['icon']} {v['name']}": v['url'] for k, v in links.items()}
                         selected_store = st.selectbox(
-                            "Choose store",
-                            options=list(store_options.keys()),
-                            key=f"store_select_{category['category']}_{item}",
+                            "Choose store", options=list(store_options.keys()),
+                            key=f"store_{category['category']}_{item}",
                             label_visibility="collapsed"
                         )
-
                         if selected_store:
                             st.link_button("🛒 Buy Now", store_options[selected_store], use_container_width=True)
-
         st.divider()
-        st.caption(
-            "**Note:** Product recommendations are based on breed-specific needs. We may earn a small commission from affiliate links, which supports our mission of promoting responsible pet care.")
+        st.caption("Affiliate links support our mission. We never earn from animal sales.")
+
+
+def render_vet_assistant_tab():
+    """Dedicated full-page Vet Assistant tab."""
+    st.header("🩺 Vet Assistant")
+    st.markdown("Select a pet profile and chat with our AI vet powered by **Llama 3 via Groq**.")
+
+    pets = load_all_pets()
+    if not pets:
+        st.warning("No pets analyzed yet. Go to **AI Analysis** first to create a profile.")
+        return
+
+    selected_pet_name = st.selectbox(
+        "Which pet do you want to ask about?",
+        options=[f"{p['nickname']} ({p['breed_detected']}) — {p['profile_id']}" for p in reversed(pets)],
+        index=0
+    )
+    selected_profile_id = selected_pet_name.split("— ")[-1].strip()
+    selected_pet = next((p for p in pets if p['profile_id'] == selected_profile_id), None)
+
+    if not selected_pet:
+        st.error("Could not load pet data.")
+        return
+
+    st.markdown("---")
+    render_vet_chat(selected_pet, chat_key=f"tab_{selected_profile_id}")
 
 
 def render_health_tracker():
-    """Tab 3: Health & Wellness Tracking"""
     st.header("🏥 Health & Wellness Tracker")
-
     pets = load_all_pets()
     if not pets:
         st.warning("No pets registered yet. Please create a profile in Step 1.")
         return
 
-    # Overview metrics
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Pets Tracked", len(pets))
+    with col1: st.metric("Total Pets Tracked", len(pets))
     with col2:
-        avg_age = sum(p.get('age', 0) for p in pets) / len(pets) if pets else 0
+        avg_age = sum(p.get('age', 0) for p in pets) / len(pets)
         st.metric("Average Age", f"{avg_age:.1f} years")
-    with col3:
-        st.metric("Care Guides Generated", len(pets))
+    with col3: st.metric("Care Guides Generated", len(pets))
 
-    # Pet health dashboard
     st.subheader("Your Pets' Health Overview")
-
-    for pet in reversed(pets[-5:]):  # Show last 5 pets
+    for pet in reversed(pets[-5:]):
         with st.expander(f"🐕 {pet['nickname']} ({pet['breed_detected']})"):
             cols = st.columns([2, 2, 1])
             with cols[0]:
@@ -954,64 +1148,46 @@ def render_health_tracker():
                 st.markdown(f"**Weight:** {pet.get('weight', 'N/A')} kg")
             with cols[1]:
                 created_date = datetime.fromisoformat(pet.get('created_at', datetime.now().isoformat()))
-                days_since = (datetime.now() - created_date).days
+                days_since   = (datetime.now() - created_date).days
                 st.markdown(f"**Profile Age:** {days_since} days")
                 st.markdown(f"**AI Confidence:** {pet.get('ai_confidence', 'N/A')}")
-            with cols[2]:
-                if st.button("View Details", key=f"view_{pet['profile_id']}"):
-                    st.session_state['selected_pet_id'] = pet['profile_id']
-                    st.rerun()
 
-    # Reminders section
     st.divider()
     st.subheader("⏰ Care Reminders")
-
     reminder_type = st.selectbox("Set New Reminder",
                                  ["Vet Appointment", "Vaccination", "Grooming", "Medication", "Buy Food"])
     reminder_date = st.date_input("Reminder Date", min_value=datetime.now().date())
     reminder_note = st.text_input("Notes")
-
     if st.button("Add Reminder"):
         st.success(f"✅ Reminder set: {reminder_type} on {reminder_date}")
-        # In a full app, this would save to a reminders database
 
 
 def render_adoption_support():
-    """Tab 4: Adoption & Welfare Resources"""
     st.header("🏠 Adoption & Welfare Support")
-
     st.markdown("""
     ### Our Ethical Stance
-    At Woofer Care AI, we believe every pet deserves a loving home. We do not support commercial breeding 
-    or pet sales. Instead, we focus on:
-    - Supporting adopters with AI-powered care guidance
-    - Promoting responsible ownership
-    - Connecting owners with welfare resources
+    At Woofer Care AI, we believe every pet deserves a loving home. We do not support commercial breeding
+    or pet sales. Instead, we focus on supporting adopters with AI-powered care guidance.
     """)
-
     col1, col2 = st.columns(2)
-
     with col1:
         st.subheader("🐾 Why Adopt?")
         st.markdown("""
-        - **Save a Life:** Millions of healthy pets are euthanized yearly due to overcrowding
-        - **Combat Puppy Mills:** Adoption doesn't support cruel breeding operations
+        - **Save a Life:** Millions of healthy pets need homes
+        - **Combat Puppy Mills:** Adoption doesn't support cruel operations
         - **Adult Pets Available:** Skip the destructive puppy phase
-        - **Cost Effective:** Adoption fees include vaccinations and spaying/neutering
+        - **Cost Effective:** Adoption fees include vaccinations
         """)
-
         st.subheader("📚 Pre-Adoption Checklist")
-        checklist_items = [
+        for item in [
             "Research breed-specific needs (use our AI tool!)",
             "Calculate monthly costs (food, vet, supplies)",
             "Ensure your housing allows pets",
             "Plan for exercise and socialization time",
             "Find a local veterinarian",
             "Pet-proof your home"
-        ]
-        for item in checklist_items:
+        ]:
             st.checkbox(item, key=f"adopt_{item}")
-
     with col2:
         st.subheader("🏥 Local Resources (Azerbaijan)")
         st.info("""
@@ -1024,10 +1200,7 @@ def render_adoption_support():
         - Baku Animal Rescue
         - Stray Animals Center
         - Volunteer-based rescue groups
-
-        *Note: These are example listings. Research local options in your area.*
         """)
-
         st.subheader("💝 How to Help")
         st.markdown("""
         - **Foster:** Temporarily house pets waiting for homes
@@ -1035,52 +1208,41 @@ def render_adoption_support():
         - **Donate:** Support welfare organizations
         - **Educate:** Share responsible ownership knowledge
         """)
-
     st.divider()
-    # FIXED: Simplified footer text
-    st.caption("Contact us!")
+    st.caption("Contact us to get involved!")
 
 
-# ==================== MAIN APPLICATION ====================
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    # Initialize knowledge base if needed
     if not os.path.exists(KNOWLEDGE_BASE_FILE):
         initialize_knowledge_base()
 
     render_header()
     render_sidebar()
 
-    # Main navigation tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔬 AI Analysis",
         "📋 Care Plan",
+        "🩺 Vet Assistant",
         "🏥 Health Tracker",
         "🏠 Adoption Support"
     ])
 
-    with tab1:
-        render_breed_analysis()
+    with tab1: render_breed_analysis()
+    with tab2: render_care_recommendations()
+    with tab3: render_vet_assistant_tab()
+    with tab4: render_health_tracker()
+    with tab5: render_adoption_support()
 
-    with tab2:
-        render_care_recommendations()
-
-    with tab3:
-        render_health_tracker()
-
-    with tab4:
-        render_adoption_support()
-
-    # Footer
     st.markdown("---")
     st.caption("""
-    **Woofer Care AI** | Promoting Responsible Pet Ownership through Technology | 
-    © 2025 Woofer Project | Not for use in pet sales or breeding markets
+    **Woofer Care AI** | Promoting Responsible Pet Ownership through Technology |
+    © 2025 Woofer Project | Vet Assistant powered by Llama 3 via Groq
     """)
 
 
 if __name__ == "__main__":
-
     main()
-
-
