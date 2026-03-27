@@ -134,7 +134,7 @@ KNOWLEDGE_BASE_FILE = "dog_care_knowledge.json"
 # ══════════════════════════════════════════════════════════════════════════════
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL   = "llama3-70b-8192"   # best free model on Groq
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 def get_groq_key():
     """Safely retrieve Groq API key from Streamlit secrets."""
