@@ -11,6 +11,21 @@ import re
 import urllib.parse
 import requests
 
+try:
+    from Woofer.trust_passport import (
+        COMPLIANCE_MARKETS,
+        TRUST_PASSPORT_CHECKS,
+        build_trust_passport,
+        calculate_readiness_score,
+    )
+except ImportError:
+    from trust_passport import (
+        COMPLIANCE_MARKETS,
+        TRUST_PASSPORT_CHECKS,
+        build_trust_passport,
+        calculate_readiness_score,
+    )
+
 # ── Tensorflow / Keras ────────────────────────────────────────────────────────
 try:
     import tensorflow as tf
@@ -1163,6 +1178,96 @@ def render_health_tracker():
         st.success(f"✅ Reminder set: {reminder_type} on {reminder_date}")
 
 
+def render_trust_passport():
+    st.header("Trust Passport & Compliance Readiness")
+    st.markdown(
+        "Create a country-aware readiness document for adoption, fostering, vet referral, "
+        "or responsible owner transfer. This is intentionally not an escrow or live-animal sales flow."
+    )
+    st.info(
+        "Strategic lane: keep Woofer adoption-first now. Treat marketplace listings, breeder payments, "
+        "and escrow as future restricted features that require legal and payment-provider review."
+    )
+
+    pets = load_all_pets()
+    if not pets:
+        st.warning("No pet profiles found. Create a profile in AI Analysis first.")
+        return
+
+    selected_pet_name = st.selectbox(
+        "Select Pet Profile",
+        options=[f"{p['nickname']} ({p['breed_detected']}) - {p['profile_id']}" for p in reversed(pets)],
+        index=0,
+        key="trust_passport_pet",
+    )
+    selected_profile_id = selected_pet_name.split(" - ")[-1]
+    selected_pet = next((p for p in pets if p["profile_id"] == selected_profile_id), None)
+    if not selected_pet:
+        st.error("Could not load pet data.")
+        return
+
+    market = st.selectbox(
+        "Target market",
+        options=list(COMPLIANCE_MARKETS.keys()),
+        index=0,
+        key="trust_passport_market",
+    )
+    market_profile = COMPLIANCE_MARKETS[market]
+
+    col_summary, col_market = st.columns([1, 1])
+    with col_summary:
+        st.subheader("Profile Snapshot")
+        st.metric("Breed estimate", selected_pet.get("breed_detected", "Unknown"))
+        st.metric("AI confidence", selected_pet.get("ai_confidence", "N/A"))
+        st.caption(f"Profile ID: {selected_pet.get('profile_id', 'N/A')}")
+
+    with col_market:
+        st.subheader("Market Position")
+        st.markdown(market_profile["position"])
+        st.warning(market_profile["blocked_until"])
+
+    st.subheader("Readiness Checklist")
+    checks = {}
+    for item in TRUST_PASSPORT_CHECKS:
+        checks[item["id"]] = st.checkbox(
+            item["label"],
+            help=item["help"],
+            key=f"trust_{selected_profile_id}_{item['id']}",
+        )
+
+    score = calculate_readiness_score(checks)
+    st.progress(score / 100, text=f"Readiness score: {score}%")
+    if score >= 80:
+        st.success("Strong enough for partner review. Still verify legal requirements before any transfer.")
+    elif score >= 50:
+        st.warning("Partially ready. Collect the missing records before presenting this to a partner.")
+    else:
+        st.error("Not ready for transfer/adoption review yet.")
+
+    with st.expander("Country notes", expanded=True):
+        for note in market_profile["notes"]:
+            st.markdown(f"- {note}")
+
+    operator_notes = st.text_area(
+        "Operator notes",
+        placeholder="Example: shelter contact, vet clinic name, vaccination proof location, follow-up date...",
+        key=f"trust_notes_{selected_profile_id}",
+    )
+    passport_md = build_trust_passport(selected_pet, market, checks, operator_notes)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_pet.get("nickname", "woofer")).strip("_")
+
+    st.download_button(
+        "Download Trust Passport",
+        data=passport_md.encode("utf-8"),
+        file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+    st.subheader("Generated Preview")
+    st.code(passport_md, language="markdown")
+
+
 def render_adoption_support():
     st.header("🏠 Adoption & Welfare Support")
     st.markdown("""
@@ -1224,11 +1329,12 @@ def main():
     render_header()
     render_sidebar()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🔬 AI Analysis",
         "📋 Care Plan",
         "🩺 Vet Assistant",
         "🏥 Health Tracker",
+        "Trust Passport",
         "🏠 Adoption Support"
     ])
 
@@ -1236,7 +1342,8 @@ def main():
     with tab2: render_care_recommendations()
     with tab3: render_vet_assistant_tab()
     with tab4: render_health_tracker()
-    with tab5: render_adoption_support()
+    with tab5: render_trust_passport()
+    with tab6: render_adoption_support()
 
     st.markdown("---")
     st.caption("""
