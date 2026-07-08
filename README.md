@@ -37,6 +37,7 @@
 2. **Personalized Care Guides:** RAG-powered recommendations for nutrition, exercise, grooming, and health monitoring.
 3. **Health Tracking:** Tools to monitor vet appointments, exercise goals, and wellness milestones.
 4. **Adoption Support:** Resources and education to promote successful adoptions and reduce returns.
+5. **Trust Passport:** Country-aware readiness checklist for adoption, fostering, vet referral, or responsible transfer — without escrow or live-animal marketplace risk.
 
 ---
 
@@ -48,6 +49,7 @@
 | 📋 **Personalized Care Plans** | RAG-powered breed-specific nutrition, exercise, grooming & health guidance |
 | 📄 **Care Guide PDFs** | Auto-generated printable care guides to share with vets or family |
 | 🏥 **Health Tracker** | Track vet appointments, exercise goals, grooming schedules & health notes |
+| ✅ **Trust Passport** | Market-aware transfer/adoption readiness document with welfare and compliance guardrails |
 | 🛒 **Smart Supply Finder** | Ethical affiliate links via Biopet.az, Wolt & Tap.az — no commission on animals |
 | 🏠 **Adoption Resources** | Educational content promoting adoption; free access for shelters |
 
@@ -60,6 +62,7 @@
 | **Frontend** | [Streamlit](https://streamlit.io/) |
 | **AI / ML** | [TensorFlow CPU](https://www.tensorflow.org/) + [Keras](https://keras.io/) — MobileNetV2 |
 | **RAG System** | Custom knowledge base with breed-specific care data |
+| **Trust Layer** | Country-aware readiness profiles for Azerbaijan, Turkey, EU, and US expansion planning |
 | **Language** | Python 3.9+ |
 | **Database** | JSON (persistent pet profiles & health records) |
 | **PDF Generation** | [FPDF2](https://py-fpdf2.readthedocs.io/) |
@@ -77,7 +80,8 @@ Woofer_project/
 ├── docs/                       # GitHub Pages website
 │   ├── index.html
 │   ├── style.css
-│   └── script.js
+│   ├── script.js
+│   └── product-strategy.md      # Product strategy, Dosty differentiation & compliance plan
 ├── requirements.txt            # Python dependencies
 ├── Woofer_presentation.pdf     # Project presentation
 └── README.md
@@ -104,6 +108,22 @@ streamlit run Woofer/woofer_care_ai.py
 ```
 
 Or just use the **[live app](https://wooferproject.streamlit.app)** — no setup needed.
+
+---
+
+## ✅ Testing
+
+Run the focused unit tests for the Trust Passport readiness logic:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Run a syntax check for the app and Trust Passport module:
+
+```bash
+python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py
+```
 
 ---
 
@@ -157,13 +177,28 @@ Woofer operates on a sustainable revenue model that **never involves transaction
 ### 🔄 Phase 3 — Welfare Network (Q4 2025)
 - Veterinary clinic integration & appointment booking
 - Foster coordination tools for shelters
+- Trust Passport for adoption, foster, vet referral, and responsible-transfer readiness
 - Educational content library
 
 ### 🔮 Future
 - Custom domain (woofer.az)
 - Regional expansion beyond Azerbaijan
 - Vet telemedicine partnerships
+- Country-by-country compliance profiles before any regulated transfer or payment feature
 - Mobile app
+
+---
+
+## 🧭 Strategic Direction
+
+Woofer is intentionally **not** starting as a live-animal marketplace or escrow product. Animal sales, breeder verification, ownership transfer, and payment custody are regulated differently across countries, so Woofer's first scalable wedge is the **trust and care-readiness layer**:
+
+- help owners, adopters, shelters, and vets prepare better pet profiles;
+- document care fit, vaccination/record readiness, owner consent, and follow-up plans;
+- keep AI health guidance educational and transparent;
+- defer escrow, listings, and breeder/payment flows until legal counsel and payment partners validate each market.
+
+See [docs/product-strategy.md](docs/product-strategy.md) for the Dosty comparison, compliance response, and 30-day execution plan.
 
 ---
 
