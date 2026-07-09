@@ -82,6 +82,122 @@ st.markdown("""
     padding-bottom: 3rem;
   }
 
+  .stApp {
+    background:
+      linear-gradient(180deg, rgba(248,244,236,0.98), rgba(250,247,241,0.98)),
+      radial-gradient(circle at 12% 8%, rgba(74,124,89,0.12), transparent 28%),
+      radial-gradient(circle at 90% 4%, rgba(232,164,74,0.16), transparent 30%);
+  }
+
+  header[data-testid="stHeader"] {
+    background: rgba(248,244,236,0.78);
+    backdrop-filter: blur(12px);
+  }
+
+  section[data-testid="stSidebar"] {
+    background: #FFFFFF;
+    border-right: 1px solid rgba(122,79,46,0.12);
+  }
+
+  .app-hero {
+    border: 1px solid rgba(122,79,46,0.12);
+    border-radius: 22px;
+    padding: 28px;
+    margin: 8px 0 24px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.96), rgba(253,246,236,0.92)),
+      radial-gradient(circle at 92% 12%, rgba(74,124,89,0.14), transparent 28%);
+    box-shadow: 0 18px 50px rgba(44,26,14,0.08);
+  }
+
+  .app-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4A7C59;
+    background: #DDEEDB;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 0.84rem;
+    margin-bottom: 14px;
+  }
+
+  .app-hero h1 {
+    color: #2C1A0E;
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    line-height: 1.05;
+    margin: 0;
+  }
+
+  .app-hero p {
+    color: #6B4B37;
+    font-size: 1.02rem;
+    line-height: 1.65;
+    max-width: 780px;
+    margin: 14px 0 0;
+  }
+
+  .app-hero-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .app-hero-card {
+    border-radius: 16px;
+    padding: 15px;
+    background: #FFFFFF;
+    border: 1px solid rgba(122,79,46,0.10);
+  }
+
+  .app-hero-card strong {
+    display: block;
+    color: #2C1A0E;
+    font-size: 0.96rem;
+    margin-bottom: 4px;
+  }
+
+  .app-hero-card span {
+    color: #6B4B37;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .workflow-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: -8px 0 18px;
+  }
+
+  .workflow-step {
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(74,124,89,0.14);
+    color: #4D3A2D;
+    font-size: 0.88rem;
+    font-weight: 650;
+  }
+
+  div[data-testid="stTabs"] [role="tablist"] {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(122,79,46,0.10);
+    border-radius: 14px;
+    padding: 6px;
+  }
+
+  div[data-testid="stTabs"] button[role="tab"] {
+    border-radius: 10px;
+  }
+
+  div[data-testid="stTabs"] button[aria-selected="true"] {
+    background: #4A7C59;
+    color: #FFFFFF;
+  }
+
   /* ── Vet Assistant chat bubbles ── */
   .chat-wrapper { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
 
@@ -171,6 +287,25 @@ st.markdown("""
   @media (max-width: 768px) {
     .block-container {
       padding: 1rem 0.85rem 2rem;
+    }
+
+    .app-hero {
+      border-radius: 16px;
+      padding: 20px 16px;
+      margin-top: 0;
+    }
+
+    .app-hero h1 {
+      font-size: 2rem;
+    }
+
+    .app-hero p {
+      font-size: 0.94rem;
+    }
+
+    .app-hero-grid,
+    .workflow-strip {
+      grid-template-columns: 1fr;
     }
 
     h1 { font-size: 1.8rem !important; line-height: 1.15 !important; }
@@ -912,14 +1047,45 @@ def predict_breed(img):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_header():
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.image("https://img.icons8.com/color/96/dog.png", width=80)
-    with col2:
-        st.title("Woofer Care AI")
-        st.markdown("**Intelligent Pet Analysis & Personalized Care Recommendations**")
-        st.caption("🐕 Promoting Responsible Pet Ownership Through AI")
-    st.markdown("---")
+    st.markdown(
+        """
+        <section class="app-hero">
+          <div class="app-eyebrow">Adoption-first care companion</div>
+          <h1>Care guidance, health notes, and trust readiness for every dog.</h1>
+          <p>
+            Upload a dog photo, build a practical care profile, ask safer educational questions,
+            and generate a shareable Trust Passport before adoption, fostering, vet referral,
+            or responsible transfer review.
+          </p>
+          <div class="app-hero-grid">
+            <div class="app-hero-card">
+              <strong>Breed-aware care</strong>
+              <span>Nutrition, exercise, grooming, health, and supplies in one profile.</span>
+            </div>
+            <div class="app-hero-card">
+              <strong>Trust Passport</strong>
+              <span>Country-aware readiness checks with Markdown and PDF export.</span>
+            </div>
+            <div class="app-hero-card">
+              <strong>Open demo</strong>
+              <span>No login required while the product is still validating its pilot flow.</span>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="workflow-strip">
+          <div class="workflow-step">1. Analyze photo</div>
+          <div class="workflow-step">2. Review care plan</div>
+          <div class="workflow-step">3. Ask vet assistant</div>
+          <div class="workflow-step">4. Export passport</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_sidebar():

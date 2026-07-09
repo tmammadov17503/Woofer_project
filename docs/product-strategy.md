@@ -158,6 +158,12 @@ Suggested packages:
 - Large AI model training.
 - Multi-country launch.
 
+## Frontend Decision
+
+Streamlit is acceptable for the current open demo because the product still depends heavily on Python AI, PDF, and readiness logic. The near-term fix is to make Streamlit feel lighter and more user-friendly, not to rewrite the whole product before partner validation.
+
+Vercel/Next.js becomes the right move after the Trust Passport flow has real partner feedback and the backend API contract is stable. See `docs/vercel-migration-plan.md`.
+
 ## Next Product Build
 
 The next build after the Streamlit Trust Passport should be a partner pilot dashboard:

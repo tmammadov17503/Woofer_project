@@ -35,7 +35,7 @@ def _new_profile_id() -> str:
 
 
 def _safe_secret_get(secrets: Any, key: str, default: Optional[str] = None) -> Optional[str]:
-    if not secrets:
+    if secrets is None:
         return default
 
     try:

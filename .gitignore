@@ -2,6 +2,7 @@ __pycache__/
 .pycache_check/
 *.py[cod]
 .pytest_cache/
+.chrome-*-profile/
 
 # Local app data generated while running the Streamlit demo.
 dog_care_knowledge.json

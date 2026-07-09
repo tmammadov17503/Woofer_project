@@ -59,7 +59,7 @@
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | [Streamlit](https://streamlit.io/) |
+| **Frontend** | Streamlit app now; Vercel/Next.js migration planned after pilot validation |
 | **AI / ML** | [TensorFlow CPU](https://www.tensorflow.org/) + [Keras](https://keras.io/) — MobileNetV2 |
 | **RAG System** | Custom knowledge base with breed-specific care data |
 | **Trust Layer** | Country-aware readiness profiles for Azerbaijan, Turkey, EU, and US expansion planning |
@@ -215,7 +215,7 @@ Woofer is intentionally **not** starting as a live-animal marketplace or escrow 
 - keep AI health guidance educational and transparent;
 - defer escrow, listings, and breeder/payment flows until legal counsel and payment partners validate each market.
 
-See [docs/product-strategy.md](docs/product-strategy.md) for the Dosty comparison, compliance response, and 30-day execution plan.
+See [docs/product-strategy.md](docs/product-strategy.md) for the Dosty comparison, compliance response, and 30-day execution plan. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the recommended frontend migration path.
 
 ---
 

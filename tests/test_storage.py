@@ -13,6 +13,19 @@ from Woofer.storage import (
 
 
 class StorageTests(unittest.TestCase):
+    def test_secret_object_is_not_truth_tested(self):
+        class SecretsLike:
+            def __len__(self):
+                raise RuntimeError("secrets file not found")
+
+            def get(self, _key):
+                raise RuntimeError("secrets file not found")
+
+        with patch.dict(os.environ, {}, clear=True):
+            config = resolve_storage_config(json_path="registry.json", secrets=SecretsLike())
+
+        self.assertEqual(config.backend, "json")
+
     def test_json_repository_saves_without_mutating_input(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "registry.json"
@@ -90,4 +103,3 @@ class StorageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
