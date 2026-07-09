@@ -18,15 +18,17 @@ Woofer currently works as a Streamlit MVP with:
 - Health tracking and vet reminder basics.
 - Azerbaijan-focused supply links.
 - Adoption-first positioning and no live animal sales.
+- Optional isolated MongoDB persistence path for private beta storage.
+- Focused unit tests and GitHub Actions checks for the product trust layer.
 
 Main gaps before serious launch:
 
 - No user accounts, auth, or durable multi-user database.
 - No privacy policy flow, consent handling, deletion/export, or analytics.
-- No tests, CI, monitoring, or error reporting.
+- No monitoring or error reporting.
 - Limited breed knowledge base.
 - No verified partner workflow for shelters, clinics, or transfers.
-- No compliance narrative beyond "we do not sell animals."
+- No legal-reviewed compliance workflow beyond the current country-aware product narrative.
 
 ## Dosty Analysis
 
@@ -167,4 +169,16 @@ The next build after the Streamlit Trust Passport should be a partner pilot dash
 - Follow-up reminders.
 - Export to PDF.
 - Analytics events.
+
+## Implementation Update - 2026-07-09
+
+The repo now has the first persistence hardening needed for a credible pilot:
+
+- Local JSON remains the default demo mode.
+- MongoDB is supported only through Woofer-specific variables: `WOOFER_STORAGE_BACKEND`, `WOOFER_MONGODB_URI`, `WOOFER_MONGO_DB_NAME`, and `WOOFER_MONGO_COLLECTION`.
+- Generic `MONGODB_URI` is intentionally ignored so Woofer does not accidentally connect to unrelated trading, automation, or analytics databases.
+- Generated runtime JSON and local secrets are ignored by git.
+- GitHub Actions runs unit tests and syntax checks on pushes and pull requests.
+
+This does not replace the need for auth, consent, privacy controls, and partner access rules before collecting real multi-user data.
 

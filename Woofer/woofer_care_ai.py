@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import time
-import uuid
 import json
 import os
 from datetime import datetime, timedelta
@@ -18,12 +17,20 @@ try:
         build_trust_passport,
         calculate_readiness_score,
     )
+    from Woofer.storage import (
+        StorageConfigurationError,
+        create_pet_profile_repository,
+    )
 except ImportError:
     from trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
         build_trust_passport,
         calculate_readiness_score,
+    )
+    from storage import (
+        StorageConfigurationError,
+        create_pet_profile_repository,
     )
 
 # ── Tensorflow / Keras ────────────────────────────────────────────────────────
@@ -143,6 +150,7 @@ st.markdown("""
 # ── File paths ────────────────────────────────────────────────────────────────
 DB_FILE             = "woofer_care_registry.json"
 KNOWLEDGE_BASE_FILE = "dog_care_knowledge.json"
+_PROFILE_REPOSITORY = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GROQ LLM INTEGRATION
@@ -654,42 +662,27 @@ def get_breed_info(knowledge_base, breed_label):
 # DATABASE
 # ══════════════════════════════════════════════════════════════════════════════
 
+def get_profile_repository():
+    global _PROFILE_REPOSITORY
+    if _PROFILE_REPOSITORY is None:
+        try:
+            _PROFILE_REPOSITORY = create_pet_profile_repository(DB_FILE, st.secrets)
+        except StorageConfigurationError as exc:
+            st.error(f"Storage is not configured correctly: {exc}")
+            st.stop()
+    return _PROFILE_REPOSITORY
+
+
 def save_to_db(data):
-    db = []
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            try:
-                db = json.load(f)
-            except json.JSONDecodeError:
-                db = []
-    data["created_at"]  = datetime.now().isoformat()
-    data["profile_id"]  = str(uuid.uuid4())[:8].upper()
-    db.append(data)
-    with open(DB_FILE, "w") as f:
-        json.dump(db, f, indent=4)
-    return data["profile_id"]
+    return get_profile_repository().save(data)
 
 
 def load_all_pets():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
+    return get_profile_repository().load_all()
 
 
 def update_pet_profile(profile_id, updates):
-    pets = load_all_pets()
-    for pet in pets:
-        if pet.get("profile_id") == profile_id:
-            pet.update(updates)
-            pet["last_updated"] = datetime.now().isoformat()
-            with open(DB_FILE, "w") as f:
-                json.dump(pets, f, indent=4)
-            return True
-    return False
+    return get_profile_repository().update(profile_id, updates)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -870,6 +863,7 @@ def render_sidebar():
         st.divider()
         pets = load_all_pets()
         st.metric("Pets Analyzed", len(pets))
+        st.caption(f"Storage: {get_profile_repository().public_label}")
         if pets:
             st.caption(f"Last analysis: {pets[-1].get('created_at', 'N/A')[:10]}")
 
@@ -934,8 +928,9 @@ def render_breed_analysis():
                             "breed_key":      breed_key,
                             "care_data":      breed_data
                         }
-                        profile_id = save_to_db(pet_data)
-                        st.session_state['current_pet']       = pet_data
+                        saved_pet = save_to_db(pet_data)
+                        profile_id = saved_pet["profile_id"]
+                        st.session_state['current_pet']       = saved_pet
                         st.session_state['analysis_complete'] = True
                         st.success(f"✅ Profile created! ID: {profile_id}")
                         st.rerun()

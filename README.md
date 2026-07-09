@@ -64,7 +64,7 @@
 | **RAG System** | Custom knowledge base with breed-specific care data |
 | **Trust Layer** | Country-aware readiness profiles for Azerbaijan, Turkey, EU, and US expansion planning |
 | **Language** | Python 3.9+ |
-| **Database** | JSON (persistent pet profiles & health records) |
+| **Database** | JSON by default, optional isolated MongoDB for private beta persistence |
 | **PDF Generation** | [FPDF2](https://py-fpdf2.readthedocs.io/) |
 | **Deployment** | [Streamlit Community Cloud](https://streamlit.io/cloud) |
 | **Website** | GitHub Pages (HTML/CSS/JS) |
@@ -107,23 +107,40 @@ pip install -r requirements.txt
 streamlit run Woofer/woofer_care_ai.py
 ```
 
+## Storage Options
+
+Woofer runs with local JSON storage by default, so demos and local testing still work without any database setup.
+
+For a private beta or partner pilot, enable a separate Woofer MongoDB database with Woofer-specific variables only:
+
+```bash
+WOOFER_STORAGE_BACKEND=mongodb
+WOOFER_MONGODB_URI=<your Woofer-only MongoDB connection string>
+WOOFER_MONGO_DB_NAME=woofer_private_beta
+WOOFER_MONGO_COLLECTION=pet_profiles
+```
+
+Do not reuse generic `MONGODB_URI` values from other projects, trading bots, analytics services, or automation experiments. See [docs/storage-setup.md](docs/storage-setup.md) for the safe setup plan.
+
 Or just use the **[live app](https://wooferproject.streamlit.app)** — no setup needed.
 
 ---
 
 ## ✅ Testing
 
-Run the focused unit tests for the Trust Passport readiness logic:
+Run the focused unit tests for the Trust Passport and storage logic:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Run a syntax check for the app and Trust Passport module:
+Run a syntax check for the app modules:
 
 ```bash
-python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py
+python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py Woofer/storage.py
 ```
+
+GitHub Actions also runs these checks on pushes and pull requests.
 
 ---
 

@@ -1,0 +1,14 @@
+__pycache__/
+.pycache_check/
+*.py[cod]
+.pytest_cache/
+
+# Local app data generated while running the Streamlit demo.
+dog_care_knowledge.json
+woofer_care_registry.json
+
+# Local secrets and deployment credentials.
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
