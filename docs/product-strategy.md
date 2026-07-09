@@ -179,6 +179,7 @@ The repo now has the first persistence hardening needed for a credible pilot:
 - Generic `MONGODB_URI` is intentionally ignored so Woofer does not accidentally connect to unrelated trading, automation, or analytics databases.
 - Generated runtime JSON and local secrets are ignored by git.
 - GitHub Actions runs unit tests and syntax checks on pushes and pull requests.
+- Trust Passport now includes missing-evidence guidance and both Markdown and PDF export for partner sharing.
 
 This does not replace the need for auth, consent, privacy controls, and partner access rules before collecting real multi-user data.
 

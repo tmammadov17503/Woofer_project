@@ -49,7 +49,7 @@
 | 📋 **Personalized Care Plans** | RAG-powered breed-specific nutrition, exercise, grooming & health guidance |
 | 📄 **Care Guide PDFs** | Auto-generated printable care guides to share with vets or family |
 | 🏥 **Health Tracker** | Track vet appointments, exercise goals, grooming schedules & health notes |
-| ✅ **Trust Passport** | Market-aware transfer/adoption readiness document with welfare and compliance guardrails |
+| ✅ **Trust Passport** | Market-aware transfer/adoption readiness document with missing-evidence guidance and PDF/Markdown export |
 | 🛒 **Smart Supply Finder** | Ethical affiliate links via Biopet.az, Wolt & Tap.az — no commission on animals |
 | 🏠 **Adoption Resources** | Educational content promoting adoption; free access for shelters |
 

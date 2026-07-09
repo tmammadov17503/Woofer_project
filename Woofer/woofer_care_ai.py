@@ -14,8 +14,10 @@ try:
     from Woofer.trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
+        build_trust_passport_pdf,
         build_trust_passport,
         calculate_readiness_score,
+        get_missing_readiness_checks,
     )
     from Woofer.storage import (
         StorageConfigurationError,
@@ -25,8 +27,10 @@ except ImportError:
     from trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
+        build_trust_passport_pdf,
         build_trust_passport,
         calculate_readiness_score,
+        get_missing_readiness_checks,
     )
     from storage import (
         StorageConfigurationError,
@@ -64,7 +68,7 @@ st.set_page_config(
     page_title="Woofer Care AI - Smart Pet Analysis",
     page_icon="🐶",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
@@ -72,6 +76,11 @@ st.markdown("""
 <style>
   /* ── General ── */
   .main { background: #FDF6EC; }
+  .block-container {
+    max-width: 1180px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+  }
 
   /* ── Vet Assistant chat bubbles ── */
   .chat-wrapper { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
@@ -143,6 +152,77 @@ st.markdown("""
   div[data-testid="stHorizontalBlock"] button {
     border-radius: 20px !important;
     font-size: 0.82rem !important;
+  }
+
+  div[data-testid="stTabs"] button {
+    white-space: nowrap;
+  }
+
+  div[data-testid="stDownloadButton"] button,
+  div[data-testid="stFormSubmitButton"] button {
+    min-height: 44px;
+  }
+
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  @media (max-width: 768px) {
+    .block-container {
+      padding: 1rem 0.85rem 2rem;
+    }
+
+    h1 { font-size: 1.8rem !important; line-height: 1.15 !important; }
+    h2 { font-size: 1.45rem !important; line-height: 1.2 !important; }
+    h3 { font-size: 1.18rem !important; line-height: 1.25 !important; }
+
+    .chat-bubble-user,
+    .chat-bubble-assistant {
+      max-width: 100%;
+      padding: 11px 14px;
+      font-size: 0.9rem;
+    }
+
+    .vet-header {
+      border-radius: 12px;
+      padding: 18px 16px;
+    }
+
+    div[data-testid="stTabs"] div[role="tablist"] {
+      gap: 0.25rem;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    div[data-testid="stTabs"] button {
+      min-height: 42px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.86rem;
+    }
+
+    div[data-testid="stHorizontalBlock"] {
+      gap: 0.65rem;
+    }
+
+    div[data-testid="column"] {
+      min-width: 0 !important;
+    }
+
+    div[data-testid="stMetric"] {
+      background: rgba(255,255,255,0.7);
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+
+    div[data-testid="stDownloadButton"] button,
+    div[data-testid="stButton"] button,
+    div[data-testid="stFormSubmitButton"] button,
+    .stLinkButton a {
+      width: 100%;
+      min-height: 44px;
+      white-space: normal;
+    }
   }
 </style>
 """, unsafe_allow_html=True)
@@ -1231,6 +1311,7 @@ def render_trust_passport():
         )
 
     score = calculate_readiness_score(checks)
+    missing_checks = get_missing_readiness_checks(checks)
     st.progress(score / 100, text=f"Readiness score: {score}%")
     if score >= 80:
         st.success("Strong enough for partner review. Still verify legal requirements before any transfer.")
@@ -1243,21 +1324,40 @@ def render_trust_passport():
         for note in market_profile["notes"]:
             st.markdown(f"- {note}")
 
+    with st.expander("Missing evidence and next steps", expanded=bool(missing_checks)):
+        if missing_checks:
+            st.markdown("Collect these items before presenting the passport to a partner:")
+            for item in missing_checks:
+                st.markdown(f"- **{item['label']}** - {item['help']}")
+        else:
+            st.success("All readiness evidence items are marked complete.")
+
     operator_notes = st.text_area(
         "Operator notes",
         placeholder="Example: shelter contact, vet clinic name, vaccination proof location, follow-up date...",
         key=f"trust_notes_{selected_profile_id}",
     )
     passport_md = build_trust_passport(selected_pet, market, checks, operator_notes)
+    passport_pdf = build_trust_passport_pdf(selected_pet, market, checks, operator_notes)
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_pet.get("nickname", "woofer")).strip("_")
 
-    st.download_button(
-        "Download Trust Passport",
-        data=passport_md.encode("utf-8"),
-        file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
+    col_markdown, col_pdf = st.columns(2)
+    with col_markdown:
+        st.download_button(
+            "Download Markdown",
+            data=passport_md.encode("utf-8"),
+            file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with col_pdf:
+        st.download_button(
+            "Download PDF",
+            data=passport_pdf,
+            file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
     st.subheader("Generated Preview")
     st.code(passport_md, language="markdown")

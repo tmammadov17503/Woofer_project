@@ -94,7 +94,7 @@
       50%       { transform: translateY(-18px) rotate(12deg); }
     }
 
-    .hero-content { position: relative; z-index: 1; max-width: 660px; }
+    .hero-content { position: relative; z-index: 1; width: 100%; max-width: 660px; min-width: 0; }
     .hero-badge {
       display: inline-flex; align-items: center; gap: 0.5rem;
       background: var(--green-light); color: var(--green);
@@ -177,7 +177,7 @@
     .features { padding: 6rem 3rem; max-width: 1100px; margin: 0 auto; }
     .section-tag { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); margin-bottom: 0.8rem; }
     .section-title { font-family: 'Fraunces', serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; line-height: 1.15; color: var(--dark); margin-bottom: 3.5rem; max-width: 520px; }
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1.5rem; }
     .feat-card {
       background: white; border-radius: 20px; padding: 2rem;
       border: 1px solid rgba(122,79,46,0.1);
@@ -198,7 +198,7 @@
     /* ── HOW IT WORKS ── */
     .how { background: var(--warm); padding: 6rem 3rem; }
     .how-inner { max-width: 1000px; margin: 0 auto; }
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem; margin-top: 3.5rem; }
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 2rem; margin-top: 3.5rem; }
     .step { text-align: center; padding: 2rem 1.5rem; }
     .step-num {
       width: 52px; height: 52px; background: var(--amber); color: var(--dark);
@@ -257,7 +257,7 @@
 
     /* ── PRICING ── */
     .pricing { padding: 6rem 3rem; background: var(--cream); max-width: 1000px; margin: 0 auto; }
-    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1.5rem; margin-top: 3rem; }
     .price-card { border-radius: 24px; padding: 2.5rem 2rem; border: 2px solid rgba(122,79,46,0.15); background: white; transition: transform 0.2s; }
     .price-card:hover { transform: translateY(-5px); }
     .price-card.featured { background: var(--brown); color: var(--cream); border-color: var(--brown); }
@@ -331,6 +331,71 @@
       .ethics { padding: 3rem 1.5rem; }
       .pricing { padding: 4rem 1.5rem; }
     }
+
+    @media (max-width: 600px) {
+      nav { padding: 0.85rem 1rem; }
+      .nav-logo { font-size: 1.35rem; }
+      .mobile-menu {
+        top: 60px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        padding: 1.2rem 1rem;
+      }
+      .hero {
+        min-height: auto;
+        padding: 6.5rem 1rem 2.5rem;
+      }
+      .hero h1 {
+        font-size: clamp(2.05rem, 11.5vw, 3.2rem);
+        line-height: 1.08;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .hero h1 em {
+        display: block;
+      }
+      .hero-sub {
+        font-size: 1rem;
+        line-height: 1.6;
+        margin-bottom: 1.8rem;
+      }
+      .hero-actions {
+        flex-direction: column;
+      }
+      .btn-primary,
+      .btn-secondary {
+        width: 100%;
+        text-align: center;
+        padding-inline: 1rem;
+      }
+      .stats { padding: 2.25rem 1rem; gap: 1.4rem; }
+      .stat-num { font-size: 2.2rem; }
+      .features,
+      .how,
+      .demo,
+      .pricing,
+      .cta-section {
+        padding-inline: 1rem;
+      }
+      .feat-card,
+      .price-card {
+        border-radius: 16px;
+        padding: 1.35rem;
+      }
+      .ethics { padding: 2.5rem 1rem; }
+      .ethics-box {
+        border-radius: 18px;
+        padding: 2rem 1.2rem;
+      }
+      .play-btn {
+        width: 64px;
+        height: 64px;
+      }
+      .back-to-top {
+        right: 1rem;
+        bottom: 1rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -367,7 +432,7 @@
   <div class="paws" id="paws"></div>
   <div class="hero-content">
     <div class="hero-badge">🌿 Adoption-first · Welfare-focused</div>
-    <h1>AI care for<br/>your <em>best friend</em></h1>
+    <h1>AI care for<br/>your<br/><em>best friend</em></h1>
     <p class="hero-sub">
       Woofer analyzes your dog's breed, builds personalized care guidance, and creates a Trust Passport for adoption, vet referral, or responsible transfer readiness.
     </p>
@@ -409,7 +474,7 @@
     <div class="feat-card reveal"><span class="feat-icon">📋</span><h3>Personalized Care Plans</h3><p>Powered by Retrieval-Augmented Generation, get breed-specific nutrition, exercise, grooming, and health recommendations tailored to your dog.</p></div>
     <div class="feat-card reveal"><span class="feat-icon">📄</span><h3>Care Guide PDFs</h3><p>Download beautiful, printable care guides to share with your vet or family. Always have the right information on hand.</p></div>
     <div class="feat-card reveal"><span class="feat-icon">🏥</span><h3>Health Tracker</h3><p>Monitor vet appointments, exercise goals, grooming schedules, and health milestones — all in one organized dashboard.</p></div>
-    <div class="feat-card reveal"><span class="feat-icon">✅</span><h3>Trust Passport</h3><p>Generate a country-aware readiness record for adoption, fostering, vet referral, or responsible transfer — without marketplace or escrow risk.</p></div>
+    <div class="feat-card reveal"><span class="feat-icon">✅</span><h3>Trust Passport</h3><p>Generate a country-aware readiness record with missing-evidence guidance and PDF/Markdown export — without marketplace or escrow risk.</p></div>
     <div class="feat-card reveal"><span class="feat-icon">🛒</span><h3>Smart Supply Finder</h3><p>Ethical affiliate links to food, toys, and accessories through Biopet.az, Wolt, and Tap.az — we never earn from pet sales.</p></div>
     <div class="feat-card reveal"><span class="feat-icon">🏠</span><h3>Adoption Resources</h3><p>Educational content promoting adoption and responsible ownership. Free premium access for registered shelters and rescue organizations.</p></div>
     <div class="feat-card reveal"><span class="feat-icon">&#128274;</span><h3>Pilot-Ready Storage</h3><p>Start with local JSON for demos, then switch to an isolated Woofer MongoDB backend for controlled shelter, vet, or private beta pilots.</p></div>
