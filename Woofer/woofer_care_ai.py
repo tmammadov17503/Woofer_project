@@ -11,6 +11,7 @@ import urllib.parse
 import requests
 
 try:
+    from Woofer.demo_profile import build_demo_pet_profile
     from Woofer.trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
@@ -24,6 +25,7 @@ try:
         create_pet_profile_repository,
     )
 except ImportError:
+    from demo_profile import build_demo_pet_profile
     from trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
@@ -900,6 +902,33 @@ def update_pet_profile(profile_id, updates):
     return get_profile_repository().update(profile_id, updates)
 
 
+def load_or_create_demo_pet_profile():
+    existing_demo = next(
+        (pet for pet in reversed(load_all_pets()) if pet.get("is_demo_profile")),
+        None,
+    )
+    demo_pet = existing_demo or save_to_db(build_demo_pet_profile(load_knowledge_base()))
+    st.session_state["current_pet"] = demo_pet
+    st.session_state["analysis_complete"] = True
+    return demo_pet
+
+
+def render_demo_profile_action(key_suffix, message=None):
+    if message:
+        st.warning(message)
+    st.caption(
+        "Demo shortcut: load Luna, a ready Golden Retriever profile, to explore care plans, "
+        "health tracking, vet-chat context, and Trust Passport export without uploading a photo."
+    )
+    if st.button(
+        "Load Luna sample profile",
+        key=f"load_demo_profile_{key_suffix}",
+        use_container_width=True,
+    ):
+        load_or_create_demo_pet_profile()
+        st.rerun()
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PDF GENERATOR
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1134,6 +1163,10 @@ def render_breed_analysis():
             help="Clear, well-lit photos work best"
         )
 
+        if not uploaded_file and not st.session_state.get("analysis_complete"):
+            st.markdown("#### Testing Woofer first?")
+            render_demo_profile_action("analysis")
+
         if uploaded_file:
             image = Image.open(uploaded_file)
             st.image(image, caption="Uploaded Image", use_container_width=True)
@@ -1213,7 +1246,7 @@ def render_breed_analysis():
                 use_container_width=True
             )
         else:
-            st.info("👈 Upload a photo and fill out the form to see AI analysis results here.")
+            st.info("Upload a photo or load Luna's sample profile to see AI analysis results here.")
 
     # ── INLINE VET ASSISTANT (appears after analysis) ──────────────────────
     if st.session_state.get('analysis_complete') and st.session_state.get('current_pet'):
@@ -1229,7 +1262,10 @@ def render_care_recommendations():
 
     pets = load_all_pets()
     if not pets:
-        st.warning("No pet profiles found. Please analyze a pet in Step 1 first.")
+        render_demo_profile_action(
+            "care_plan",
+            "No pet profiles found. Analyze a dog photo or load the sample profile first.",
+        )
         return
 
     selected_pet_name = st.selectbox(
@@ -1363,7 +1399,10 @@ def render_vet_assistant_tab():
 
     pets = load_all_pets()
     if not pets:
-        st.warning("No pets analyzed yet. Go to **AI Analysis** first to create a profile.")
+        render_demo_profile_action(
+            "vet_assistant",
+            "No pets analyzed yet. Create a profile or load the sample profile first.",
+        )
         return
 
     selected_pet_name = st.selectbox(
@@ -1386,7 +1425,10 @@ def render_health_tracker():
     st.header("🏥 Health & Wellness Tracker")
     pets = load_all_pets()
     if not pets:
-        st.warning("No pets registered yet. Please create a profile in Step 1.")
+        render_demo_profile_action(
+            "health_tracker",
+            "No pets registered yet. Create a profile or load the sample profile first.",
+        )
         return
 
     col1, col2, col3 = st.columns(3)
@@ -1432,7 +1474,10 @@ def render_trust_passport():
 
     pets = load_all_pets()
     if not pets:
-        st.warning("No pet profiles found. Create a profile in AI Analysis first.")
+        render_demo_profile_action(
+            "trust_passport",
+            "No pet profiles found. Create a profile or load the sample profile first.",
+        )
         return
 
     selected_pet_name = st.selectbox(

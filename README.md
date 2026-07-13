@@ -24,6 +24,18 @@
 
 ---
 
+## Demo Path
+
+Woofer is now easier to test in a pitch, partner meeting, or conference booth:
+
+1. Open the live app.
+2. Click **Load Luna sample profile** if you do not want to upload a dog photo yet.
+3. Review the generated care plan, health tracker, vet-chat context, and Trust Passport export.
+
+The sample profile uses the same app flow as a real uploaded-photo profile, so judges can evaluate the product experience even before they test image recognition.
+
+---
+
 ## 🎯 Mission & Vision
 
 ### The Problem
