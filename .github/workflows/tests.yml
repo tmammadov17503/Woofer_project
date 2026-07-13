@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+    branches: ["main", "feature/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lightweight test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install fpdf2 pymongo requests pillow numpy streamlit
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Syntax check app modules
+        run: python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py Woofer/storage.py
+

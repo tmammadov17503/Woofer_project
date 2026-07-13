@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import time
-import uuid
 import json
 import os
 from datetime import datetime, timedelta
@@ -15,15 +14,27 @@ try:
     from Woofer.trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
+        build_trust_passport_pdf,
         build_trust_passport,
         calculate_readiness_score,
+        get_missing_readiness_checks,
+    )
+    from Woofer.storage import (
+        StorageConfigurationError,
+        create_pet_profile_repository,
     )
 except ImportError:
     from trust_passport import (
         COMPLIANCE_MARKETS,
         TRUST_PASSPORT_CHECKS,
+        build_trust_passport_pdf,
         build_trust_passport,
         calculate_readiness_score,
+        get_missing_readiness_checks,
+    )
+    from storage import (
+        StorageConfigurationError,
+        create_pet_profile_repository,
     )
 
 # ── Tensorflow / Keras ────────────────────────────────────────────────────────
@@ -57,7 +68,7 @@ st.set_page_config(
     page_title="Woofer Care AI - Smart Pet Analysis",
     page_icon="🐶",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
@@ -65,6 +76,127 @@ st.markdown("""
 <style>
   /* ── General ── */
   .main { background: #FDF6EC; }
+  .block-container {
+    max-width: 1180px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+  }
+
+  .stApp {
+    background:
+      linear-gradient(180deg, rgba(248,244,236,0.98), rgba(250,247,241,0.98)),
+      radial-gradient(circle at 12% 8%, rgba(74,124,89,0.12), transparent 28%),
+      radial-gradient(circle at 90% 4%, rgba(232,164,74,0.16), transparent 30%);
+  }
+
+  header[data-testid="stHeader"] {
+    background: rgba(248,244,236,0.78);
+    backdrop-filter: blur(12px);
+  }
+
+  section[data-testid="stSidebar"] {
+    background: #FFFFFF;
+    border-right: 1px solid rgba(122,79,46,0.12);
+  }
+
+  .app-hero {
+    border: 1px solid rgba(122,79,46,0.12);
+    border-radius: 22px;
+    padding: 28px;
+    margin: 8px 0 24px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.96), rgba(253,246,236,0.92)),
+      radial-gradient(circle at 92% 12%, rgba(74,124,89,0.14), transparent 28%);
+    box-shadow: 0 18px 50px rgba(44,26,14,0.08);
+  }
+
+  .app-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4A7C59;
+    background: #DDEEDB;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 0.84rem;
+    margin-bottom: 14px;
+  }
+
+  .app-hero h1 {
+    color: #2C1A0E;
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    line-height: 1.05;
+    margin: 0;
+  }
+
+  .app-hero p {
+    color: #6B4B37;
+    font-size: 1.02rem;
+    line-height: 1.65;
+    max-width: 780px;
+    margin: 14px 0 0;
+  }
+
+  .app-hero-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .app-hero-card {
+    border-radius: 16px;
+    padding: 15px;
+    background: #FFFFFF;
+    border: 1px solid rgba(122,79,46,0.10);
+  }
+
+  .app-hero-card strong {
+    display: block;
+    color: #2C1A0E;
+    font-size: 0.96rem;
+    margin-bottom: 4px;
+  }
+
+  .app-hero-card span {
+    color: #6B4B37;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .workflow-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: -8px 0 18px;
+  }
+
+  .workflow-step {
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(74,124,89,0.14);
+    color: #4D3A2D;
+    font-size: 0.88rem;
+    font-weight: 650;
+  }
+
+  div[data-testid="stTabs"] [role="tablist"] {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(122,79,46,0.10);
+    border-radius: 14px;
+    padding: 6px;
+  }
+
+  div[data-testid="stTabs"] button[role="tab"] {
+    border-radius: 10px;
+  }
+
+  div[data-testid="stTabs"] button[aria-selected="true"] {
+    background: #4A7C59;
+    color: #FFFFFF;
+  }
 
   /* ── Vet Assistant chat bubbles ── */
   .chat-wrapper { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
@@ -137,12 +269,103 @@ st.markdown("""
     border-radius: 20px !important;
     font-size: 0.82rem !important;
   }
+
+  div[data-testid="stTabs"] button {
+    white-space: nowrap;
+  }
+
+  div[data-testid="stDownloadButton"] button,
+  div[data-testid="stFormSubmitButton"] button {
+    min-height: 44px;
+  }
+
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  @media (max-width: 768px) {
+    .block-container {
+      padding: 1rem 0.85rem 2rem;
+    }
+
+    .app-hero {
+      border-radius: 16px;
+      padding: 20px 16px;
+      margin-top: 0;
+    }
+
+    .app-hero h1 {
+      font-size: 2rem;
+    }
+
+    .app-hero p {
+      font-size: 0.94rem;
+    }
+
+    .app-hero-grid,
+    .workflow-strip {
+      grid-template-columns: 1fr;
+    }
+
+    h1 { font-size: 1.8rem !important; line-height: 1.15 !important; }
+    h2 { font-size: 1.45rem !important; line-height: 1.2 !important; }
+    h3 { font-size: 1.18rem !important; line-height: 1.25 !important; }
+
+    .chat-bubble-user,
+    .chat-bubble-assistant {
+      max-width: 100%;
+      padding: 11px 14px;
+      font-size: 0.9rem;
+    }
+
+    .vet-header {
+      border-radius: 12px;
+      padding: 18px 16px;
+    }
+
+    div[data-testid="stTabs"] div[role="tablist"] {
+      gap: 0.25rem;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    div[data-testid="stTabs"] button {
+      min-height: 42px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.86rem;
+    }
+
+    div[data-testid="stHorizontalBlock"] {
+      gap: 0.65rem;
+    }
+
+    div[data-testid="column"] {
+      min-width: 0 !important;
+    }
+
+    div[data-testid="stMetric"] {
+      background: rgba(255,255,255,0.7);
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+
+    div[data-testid="stDownloadButton"] button,
+    div[data-testid="stButton"] button,
+    div[data-testid="stFormSubmitButton"] button,
+    .stLinkButton a {
+      width: 100%;
+      min-height: 44px;
+      white-space: normal;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
 # ── File paths ────────────────────────────────────────────────────────────────
 DB_FILE             = "woofer_care_registry.json"
 KNOWLEDGE_BASE_FILE = "dog_care_knowledge.json"
+_PROFILE_REPOSITORY = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GROQ LLM INTEGRATION
@@ -654,42 +877,27 @@ def get_breed_info(knowledge_base, breed_label):
 # DATABASE
 # ══════════════════════════════════════════════════════════════════════════════
 
+def get_profile_repository():
+    global _PROFILE_REPOSITORY
+    if _PROFILE_REPOSITORY is None:
+        try:
+            _PROFILE_REPOSITORY = create_pet_profile_repository(DB_FILE, st.secrets)
+        except StorageConfigurationError as exc:
+            st.error(f"Storage is not configured correctly: {exc}")
+            st.stop()
+    return _PROFILE_REPOSITORY
+
+
 def save_to_db(data):
-    db = []
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            try:
-                db = json.load(f)
-            except json.JSONDecodeError:
-                db = []
-    data["created_at"]  = datetime.now().isoformat()
-    data["profile_id"]  = str(uuid.uuid4())[:8].upper()
-    db.append(data)
-    with open(DB_FILE, "w") as f:
-        json.dump(db, f, indent=4)
-    return data["profile_id"]
+    return get_profile_repository().save(data)
 
 
 def load_all_pets():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
+    return get_profile_repository().load_all()
 
 
 def update_pet_profile(profile_id, updates):
-    pets = load_all_pets()
-    for pet in pets:
-        if pet.get("profile_id") == profile_id:
-            pet.update(updates)
-            pet["last_updated"] = datetime.now().isoformat()
-            with open(DB_FILE, "w") as f:
-                json.dump(pets, f, indent=4)
-            return True
-    return False
+    return get_profile_repository().update(profile_id, updates)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -839,14 +1047,45 @@ def predict_breed(img):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_header():
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.image("https://img.icons8.com/color/96/dog.png", width=80)
-    with col2:
-        st.title("Woofer Care AI")
-        st.markdown("**Intelligent Pet Analysis & Personalized Care Recommendations**")
-        st.caption("🐕 Promoting Responsible Pet Ownership Through AI")
-    st.markdown("---")
+    st.markdown(
+        """
+        <section class="app-hero">
+          <div class="app-eyebrow">Adoption-first care companion</div>
+          <h1>Care guidance, health notes, and trust readiness for every dog.</h1>
+          <p>
+            Upload a dog photo, build a practical care profile, ask safer educational questions,
+            and generate a shareable Trust Passport before adoption, fostering, vet referral,
+            or responsible transfer review.
+          </p>
+          <div class="app-hero-grid">
+            <div class="app-hero-card">
+              <strong>Breed-aware care</strong>
+              <span>Nutrition, exercise, grooming, health, and supplies in one profile.</span>
+            </div>
+            <div class="app-hero-card">
+              <strong>Trust Passport</strong>
+              <span>Country-aware readiness checks with Markdown and PDF export.</span>
+            </div>
+            <div class="app-hero-card">
+              <strong>Open demo</strong>
+              <span>No login required while the product is still validating its pilot flow.</span>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="workflow-strip">
+          <div class="workflow-step">1. Analyze photo</div>
+          <div class="workflow-step">2. Review care plan</div>
+          <div class="workflow-step">3. Ask vet assistant</div>
+          <div class="workflow-step">4. Export passport</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_sidebar():
@@ -870,6 +1109,7 @@ def render_sidebar():
         st.divider()
         pets = load_all_pets()
         st.metric("Pets Analyzed", len(pets))
+        st.caption(f"Storage: {get_profile_repository().public_label}")
         if pets:
             st.caption(f"Last analysis: {pets[-1].get('created_at', 'N/A')[:10]}")
 
@@ -934,8 +1174,9 @@ def render_breed_analysis():
                             "breed_key":      breed_key,
                             "care_data":      breed_data
                         }
-                        profile_id = save_to_db(pet_data)
-                        st.session_state['current_pet']       = pet_data
+                        saved_pet = save_to_db(pet_data)
+                        profile_id = saved_pet["profile_id"]
+                        st.session_state['current_pet']       = saved_pet
                         st.session_state['analysis_complete'] = True
                         st.success(f"✅ Profile created! ID: {profile_id}")
                         st.rerun()
@@ -1236,6 +1477,7 @@ def render_trust_passport():
         )
 
     score = calculate_readiness_score(checks)
+    missing_checks = get_missing_readiness_checks(checks)
     st.progress(score / 100, text=f"Readiness score: {score}%")
     if score >= 80:
         st.success("Strong enough for partner review. Still verify legal requirements before any transfer.")
@@ -1248,21 +1490,40 @@ def render_trust_passport():
         for note in market_profile["notes"]:
             st.markdown(f"- {note}")
 
+    with st.expander("Missing evidence and next steps", expanded=bool(missing_checks)):
+        if missing_checks:
+            st.markdown("Collect these items before presenting the passport to a partner:")
+            for item in missing_checks:
+                st.markdown(f"- **{item['label']}** - {item['help']}")
+        else:
+            st.success("All readiness evidence items are marked complete.")
+
     operator_notes = st.text_area(
         "Operator notes",
         placeholder="Example: shelter contact, vet clinic name, vaccination proof location, follow-up date...",
         key=f"trust_notes_{selected_profile_id}",
     )
     passport_md = build_trust_passport(selected_pet, market, checks, operator_notes)
+    passport_pdf = build_trust_passport_pdf(selected_pet, market, checks, operator_notes)
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_pet.get("nickname", "woofer")).strip("_")
 
-    st.download_button(
-        "Download Trust Passport",
-        data=passport_md.encode("utf-8"),
-        file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
+    col_markdown, col_pdf = st.columns(2)
+    with col_markdown:
+        st.download_button(
+            "Download Markdown",
+            data=passport_md.encode("utf-8"),
+            file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with col_pdf:
+        st.download_button(
+            "Download PDF",
+            data=passport_pdf,
+            file_name=f"Woofer_Trust_Passport_{safe_name or 'pet'}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
     st.subheader("Generated Preview")
     st.code(passport_md, language="markdown")
