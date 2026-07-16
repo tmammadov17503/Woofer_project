@@ -31,8 +31,9 @@ Woofer is now easier to test in a pitch, partner meeting, or conference booth:
 1. Open the live app.
 2. Click **Load Luna sample profile** if you do not want to upload a dog photo yet.
 3. Review the generated care plan, health tracker, vet-chat context, and Trust Passport export.
+4. Open **Pilot Review** to mark partner evidence, save reviewer notes, and download a pilot report.
 
-The sample profile uses the same app flow as a real uploaded-photo profile, so judges can evaluate the product experience even before they test image recognition.
+The sample profile uses the same app flow as a real uploaded-photo profile, so judges can evaluate the product experience, Trust Passport, and partner-review workflow even before they test image recognition.
 
 ---
 
@@ -50,6 +51,7 @@ The sample profile uses the same app flow as a real uploaded-photo profile, so j
 3. **Health Tracking:** Tools to monitor vet appointments, exercise goals, and wellness milestones.
 4. **Adoption Support:** Resources and education to promote successful adoptions and reduce returns.
 5. **Trust Passport:** Country-aware readiness checklist for adoption, fostering, vet referral, or responsible transfer — without escrow or live-animal marketplace risk.
+6. **Pilot Review:** No-auth partner review workflow for shelters, vets, fosters, and advisors to capture readiness status, notes, and next actions.
 
 ---
 
@@ -62,6 +64,7 @@ The sample profile uses the same app flow as a real uploaded-photo profile, so j
 | 📄 **Care Guide PDFs** | Auto-generated printable care guides to share with vets or family |
 | 🏥 **Health Tracker** | Track vet appointments, exercise goals, grooming schedules & health notes |
 | ✅ **Trust Passport** | Market-aware transfer/adoption readiness document with missing-evidence guidance and PDF/Markdown export |
+| 🧪 **Pilot Review** | Lightweight partner dashboard for readiness scores, reviewer notes, evidence gaps, and downloadable pilot reports |
 | 🛒 **Smart Supply Finder** | Ethical affiliate links via Biopet.az, Wolt & Tap.az — no commission on animals |
 | 🏠 **Adoption Resources** | Educational content promoting adoption; free access for shelters |
 
@@ -76,7 +79,7 @@ The sample profile uses the same app flow as a real uploaded-photo profile, so j
 | **RAG System** | Custom knowledge base with breed-specific care data |
 | **Trust Layer** | Country-aware readiness profiles for Azerbaijan, Turkey, EU, and US expansion planning |
 | **Language** | Python 3.9+ |
-| **Database** | JSON by default, optional isolated MongoDB for private beta persistence |
+| **Database** | JSON by default, optional isolated MongoDB for pet profiles and pilot reviews |
 | **PDF Generation** | [FPDF2](https://py-fpdf2.readthedocs.io/) |
 | **Deployment** | [Streamlit Community Cloud](https://streamlit.io/cloud) |
 | **Website** | GitHub Pages (HTML/CSS/JS) |
@@ -149,7 +152,7 @@ python -m unittest discover -s tests -v
 Run a syntax check for the app modules:
 
 ```bash
-python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py Woofer/storage.py
+python -m py_compile Woofer/woofer_care_ai.py Woofer/trust_passport.py Woofer/storage.py Woofer/pilot.py
 ```
 
 GitHub Actions also runs these checks on pushes and pull requests.
@@ -207,6 +210,7 @@ Woofer operates on a sustainable revenue model that **never involves transaction
 - Veterinary clinic integration & appointment booking
 - Foster coordination tools for shelters
 - Trust Passport for adoption, foster, vet referral, and responsible-transfer readiness
+- No-auth Pilot Review workflow for early partner/advisor testing
 - Educational content library
 
 ### 🔮 Future
@@ -227,7 +231,7 @@ Woofer is intentionally **not** starting as a live-animal marketplace or escrow 
 - keep AI health guidance educational and transparent;
 - defer escrow, listings, and breeder/payment flows until legal counsel and payment partners validate each market.
 
-See [docs/product-strategy.md](docs/product-strategy.md) for the Dosty comparison, compliance response, and 30-day execution plan. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the recommended frontend migration path.
+See [docs/product-strategy.md](docs/product-strategy.md) for the Dosty comparison, compliance response, and 30-day execution plan. See [docs/pilot-proposal.md](docs/pilot-proposal.md) for the partner pilot package, and [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the recommended frontend migration path.
 
 ---
 

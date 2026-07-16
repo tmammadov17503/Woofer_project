@@ -20,6 +20,16 @@ try:
         calculate_readiness_score,
         get_missing_readiness_checks,
     )
+    from Woofer.pilot import (
+        PILOT_FEEDBACK_SIGNALS,
+        PILOT_PARTNER_TYPES,
+        PILOT_STAGES,
+        build_pilot_case,
+        build_pilot_case_from_pet,
+        build_pilot_report,
+        normalize_readiness_checks,
+        summarize_pilot_cases,
+    )
     from Woofer.storage import (
         StorageConfigurationError,
         create_pet_profile_repository,
@@ -33,6 +43,16 @@ except ImportError:
         build_trust_passport,
         calculate_readiness_score,
         get_missing_readiness_checks,
+    )
+    from pilot import (
+        PILOT_FEEDBACK_SIGNALS,
+        PILOT_PARTNER_TYPES,
+        PILOT_STAGES,
+        build_pilot_case,
+        build_pilot_case_from_pet,
+        build_pilot_report,
+        normalize_readiness_checks,
+        summarize_pilot_cases,
     )
     from storage import (
         StorageConfigurationError,
@@ -169,7 +189,7 @@ st.markdown("""
 
   .workflow-strip {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
     margin: -8px 0 18px;
   }
@@ -1096,8 +1116,8 @@ def render_header():
               <span>Country-aware readiness checks with Markdown and PDF export.</span>
             </div>
             <div class="app-hero-card">
-              <strong>Open demo</strong>
-              <span>No login required while the product is still validating its pilot flow.</span>
+              <strong>Partner pilot</strong>
+              <span>No login required for early shelter, vet, foster, or advisor review.</span>
             </div>
           </div>
         </section>
@@ -1111,6 +1131,7 @@ def render_header():
           <div class="workflow-step">2. Review care plan</div>
           <div class="workflow-step">3. Ask vet assistant</div>
           <div class="workflow-step">4. Export passport</div>
+          <div class="workflow-step">5. Run pilot review</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1461,6 +1482,13 @@ def render_health_tracker():
         st.success(f"✅ Reminder set: {reminder_type} on {reminder_date}")
 
 
+def _option_index(options, value, default=0):
+    try:
+        return options.index(value)
+    except ValueError:
+        return default
+
+
 def render_trust_passport():
     st.header("Trust Passport & Compliance Readiness")
     st.markdown(
@@ -1574,6 +1602,157 @@ def render_trust_passport():
     st.code(passport_md, language="markdown")
 
 
+def render_pilot_review():
+    st.header("Partner Pilot Review")
+    st.markdown(
+        "Use this no-login workflow for early shelter, vet, foster, or startup-advisor pilots. "
+        "It turns pet profiles and Trust Passport evidence into a simple review pipeline."
+    )
+
+    pets = load_all_pets()
+    if not pets:
+        render_demo_profile_action(
+            "pilot_review",
+            "No pet profiles found. Create a profile or load the sample profile first.",
+        )
+        return
+
+    stored_cases = [build_pilot_case_from_pet(pet) for pet in pets]
+    summary = summarize_pilot_cases(stored_cases)
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Pilot cases", summary["total_cases"])
+    metric_cols[1].metric("Ready", summary["ready_cases"])
+    metric_cols[2].metric("In progress", summary["in_progress_cases"])
+    metric_cols[3].metric("Avg readiness", f"{summary['average_readiness_score']}%")
+
+    if summary["top_missing_evidence"]:
+        with st.expander("Current evidence gaps", expanded=False):
+            for gap in summary["top_missing_evidence"][:5]:
+                st.markdown(f"- **{gap['label']}** - {gap['count']} case(s)")
+
+    selected_pet_name = st.selectbox(
+        "Select pilot case",
+        options=[f"{p['nickname']} ({p['breed_detected']}) - {p['profile_id']}" for p in reversed(pets)],
+        index=0,
+        key="pilot_case_pet",
+    )
+    selected_profile_id = selected_pet_name.split(" - ")[-1]
+    selected_pet = next((p for p in pets if p["profile_id"] == selected_profile_id), None)
+    if not selected_pet:
+        st.error("Could not load pilot case data.")
+        return
+
+    review = selected_pet.get("pilot_review") if isinstance(selected_pet.get("pilot_review"), dict) else {}
+    stored_checks = normalize_readiness_checks(review.get("readiness_checks", {}), selected_pet)
+
+    left_col, right_col = st.columns([1, 1])
+    with left_col:
+        market = st.selectbox(
+            "Target market",
+            options=list(COMPLIANCE_MARKETS.keys()),
+            index=_option_index(list(COMPLIANCE_MARKETS.keys()), review.get("market", "Azerbaijan")),
+            key=f"pilot_market_{selected_profile_id}",
+        )
+        partner_type = st.selectbox(
+            "Partner type",
+            options=PILOT_PARTNER_TYPES,
+            index=_option_index(PILOT_PARTNER_TYPES, review.get("partner_type", "Shelter or rescue")),
+            key=f"pilot_partner_{selected_profile_id}",
+        )
+        stage = st.selectbox(
+            "Pilot stage",
+            options=PILOT_STAGES,
+            index=_option_index(PILOT_STAGES, review.get("stage", "Intake")),
+            key=f"pilot_stage_{selected_profile_id}",
+        )
+
+    with right_col:
+        reviewer_name = st.text_input(
+            "Reviewer name",
+            value=review.get("reviewer_name", ""),
+            placeholder="Shelter, clinic, advisor, or your name",
+            key=f"pilot_reviewer_{selected_profile_id}",
+        )
+        feedback_signal = st.selectbox(
+            "Feedback signal",
+            options=PILOT_FEEDBACK_SIGNALS,
+            index=_option_index(PILOT_FEEDBACK_SIGNALS, review.get("feedback_signal", "Not reviewed yet")),
+            key=f"pilot_feedback_{selected_profile_id}",
+        )
+        reviewer_notes = st.text_area(
+            "Reviewer notes",
+            value=review.get("reviewer_notes", ""),
+            placeholder="What is missing, what worked, partner comments, next meeting date...",
+            key=f"pilot_notes_{selected_profile_id}",
+        )
+
+    st.subheader("Evidence Checklist")
+    checks = {}
+    for item in TRUST_PASSPORT_CHECKS:
+        checks[item["id"]] = st.checkbox(
+            item["label"],
+            value=stored_checks[item["id"]],
+            help=item["help"],
+            key=f"pilot_check_{selected_profile_id}_{item['id']}",
+        )
+
+    draft_case = build_pilot_case(
+        pet=selected_pet,
+        market=market,
+        readiness_checks=checks,
+        partner_type=partner_type,
+        stage=stage,
+        reviewer_name=reviewer_name,
+        reviewer_notes=reviewer_notes,
+        feedback_signal=feedback_signal,
+    )
+
+    st.progress(draft_case["readiness_score"] / 100, text=f"Pilot readiness: {draft_case['readiness_score']}%")
+    if draft_case["status_bucket"] == "ready":
+        st.success(draft_case["status"])
+    elif draft_case["status_bucket"] == "in_progress":
+        st.warning(draft_case["status"])
+    else:
+        st.error(draft_case["status"])
+
+    with st.expander("Next actions", expanded=True):
+        for action in draft_case["next_actions"]:
+            st.markdown(f"- {action}")
+
+    if st.button("Save pilot review", type="primary", use_container_width=True, key=f"save_pilot_{selected_profile_id}"):
+        pilot_review = {
+            "market": market,
+            "partner_type": partner_type,
+            "stage": stage,
+            "readiness_checks": checks,
+            "reviewer_name": reviewer_name.strip(),
+            "reviewer_notes": reviewer_notes.strip(),
+            "feedback_signal": feedback_signal,
+            "last_reviewed_at": datetime.now().isoformat(),
+        }
+        if update_pet_profile(selected_profile_id, {"pilot_review": pilot_review}):
+            st.success("Pilot review saved to this pet profile.")
+            st.rerun()
+        else:
+            st.error("Could not save the pilot review. Please reload and try again.")
+
+    report_cases = [
+        draft_case if pet.get("profile_id") == selected_profile_id else build_pilot_case_from_pet(pet)
+        for pet in pets
+    ]
+    report_md = build_pilot_report(report_cases)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_pet.get("nickname", "woofer")).strip("_")
+
+    st.download_button(
+        "Download pilot report",
+        data=report_md.encode("utf-8"),
+        file_name=f"Woofer_Pilot_Report_{safe_name or 'case'}.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
 def render_adoption_support():
     st.header("🏠 Adoption & Welfare Support")
     st.markdown("""
@@ -1635,12 +1814,13 @@ def main():
     render_header()
     render_sidebar()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "🔬 AI Analysis",
         "📋 Care Plan",
         "🩺 Vet Assistant",
         "🏥 Health Tracker",
         "Trust Passport",
+        "Pilot Review",
         "🏠 Adoption Support"
     ])
 
@@ -1649,7 +1829,8 @@ def main():
     with tab3: render_vet_assistant_tab()
     with tab4: render_health_tracker()
     with tab5: render_trust_passport()
-    with tab6: render_adoption_support()
+    with tab6: render_pilot_review()
+    with tab7: render_adoption_support()
 
     st.markdown("---")
     st.caption("""

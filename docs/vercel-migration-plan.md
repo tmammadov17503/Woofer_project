@@ -1,6 +1,6 @@
 # Vercel Migration Plan
 
-Updated: 2026-07-10
+Updated: 2026-07-16
 
 ## Recommendation
 
@@ -20,7 +20,7 @@ The reason: Woofer's current value is Python-heavy: image analysis, care-guide g
 
 Move to Vercel after these are true:
 
-- The Trust Passport flow is validated by at least one shelter, vet, foster group, or advisor.
+- The Trust Passport and Pilot Review flow is validated by at least one shelter, vet, foster group, or advisor.
 - The app needs a more polished mobile-first user experience than Streamlit can comfortably provide.
 - The backend API contract is stable enough to avoid rewriting the same product twice.
 
@@ -29,6 +29,7 @@ Move to Vercel after these are true:
 - Explicit light Streamlit theme.
 - Friendlier first-screen product hero.
 - Mobile-safe layout styles for tabs, buttons, download controls, code previews, and cards.
+- No-auth Partner Pilot Review workflow for early shelter, vet, foster, and advisor testing.
 - Vercel-ready product direction documented without blocking the current demo.
 
 ## First Vercel Build
@@ -38,6 +39,7 @@ The first Vercel version should not be a giant rebuild. It should be a thin fron
 - Home/dashboard screen.
 - Create pet profile flow.
 - Trust Passport checklist.
+- Pilot Review dashboard and report download.
 - PDF download action served by Python API.
 - Public demo mode with sample data.
 - Later: partner accounts, private records, consent, and evidence uploads.
