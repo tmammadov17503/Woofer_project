@@ -1,6 +1,6 @@
 # Woofer Storage Setup
 
-Updated: 2026-07-09
+Updated: 2026-07-16
 
 ## Decision
 
@@ -20,7 +20,7 @@ No setup is required.
 streamlit run Woofer/woofer_care_ai.py
 ```
 
-The app stores generated pet profiles in `woofer_care_registry.json`, which is ignored by git.
+The app stores generated pet profiles in `woofer_care_registry.json`, which is ignored by git. Saved Partner Pilot Review notes are stored on the selected pet profile under `pilot_review`.
 
 ## MongoDB Private Beta Mode
 
@@ -42,7 +42,7 @@ For Streamlit Cloud, add the same values as secrets or environment variables. Th
 - `consent_events`: future privacy consent, export, and deletion requests.
 - `audit_events`: future admin actions and partner workflow events.
 
-Only `pet_profiles` is implemented today.
+Only `pet_profiles` is implemented today. It now includes optional `pilot_review` metadata for the no-auth pilot workflow: target market, partner type, stage, readiness checks, reviewer notes, feedback signal, and last-reviewed timestamp.
 
 ## Next Persistence Work
 

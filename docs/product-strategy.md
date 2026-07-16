@@ -164,19 +164,26 @@ Streamlit is acceptable for the current open demo because the product still depe
 
 Vercel/Next.js becomes the right move after the Trust Passport flow has real partner feedback and the backend API contract is stable. See `docs/vercel-migration-plan.md`.
 
-## Next Product Build
+## Current Product Build
 
-The next build after the Streamlit Trust Passport should be a partner pilot dashboard:
+The next product layer after the Streamlit Trust Passport is now a no-auth Partner Pilot Review workflow. It is intentionally lightweight so shelters, vets, foster coordinators, and advisors can test the product without creating accounts during early validation:
+
+- Pet profile review list.
+- Partner type and pilot stage.
+- Readiness score and status bucket.
+- Evidence checklist tied to the Trust Passport.
+- Reviewer notes and feedback signal.
+- Downloadable Markdown pilot report.
+
+The next deeper build should add the private-beta controls that are intentionally not part of the open demo yet:
 
 - Authenticated partner accounts.
-- Pet profile list.
-- Passport status.
 - Evidence attachments.
-- Follow-up reminders.
-- Export to PDF.
+- Follow-up reminders with saved history.
 - Analytics events.
+- Consent, export, and deletion controls.
 
-## Implementation Update - 2026-07-09
+## Implementation Update - 2026-07-16
 
 The repo now has the first persistence hardening needed for a credible pilot:
 
@@ -186,6 +193,7 @@ The repo now has the first persistence hardening needed for a credible pilot:
 - Generated runtime JSON and local secrets are ignored by git.
 - GitHub Actions runs unit tests and syntax checks on pushes and pull requests.
 - Trust Passport now includes missing-evidence guidance and both Markdown and PDF export for partner sharing.
+- Partner Pilot Review now stores review metadata on pet profiles and generates a downloadable pilot report.
 
 This does not replace the need for auth, consent, privacy controls, and partner access rules before collecting real multi-user data.
 
